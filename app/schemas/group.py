@@ -15,6 +15,10 @@ class GroupCreate(BaseModel):
         default_factory=list,
         description="User IDs to add as members (creator is added automatically)",
     )
+    member_emails: list[str] = Field(
+        default_factory=list,
+        description="User emails to add as members (resolved server-side)",
+    )
 
 
 # ── Response schemas ──────────────────────────────────────────────────────

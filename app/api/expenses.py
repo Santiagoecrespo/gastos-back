@@ -153,6 +153,16 @@ async def create_group(
     all_member_ids = set(payload.member_ids)
     all_member_ids.add(current_user.id)
 
+    # Resolve emails → user IDs
+    for email in payload.member_emails:
+        user_by_email = db.query(User).filter(User.email == email.lower()).first()
+        if not user_by_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No existe un usuario con el email {email}",
+            )
+        all_member_ids.add(user_by_email.id)
+
     # Validate every member exists
     members: list[User] = []
     for uid in all_member_ids:
