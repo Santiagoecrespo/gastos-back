@@ -30,6 +30,73 @@ from app.services.inflation_service import adjust_for_inflation
 router = APIRouter(tags=["expenses"])
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# ENDPOINT 0a — Listar grupos del usuario
+# ══════════════════════════════════════════════════════════════════════════
+@router.get(
+    "/groups",
+    response_model=list[GroupResponse],
+    summary="List all groups for the current user",
+)
+async def list_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return every group the authenticated user belongs to."""
+    memberships = (
+        db.query(UserGroup)
+        .filter(UserGroup.user_id == current_user.id)
+        .all()
+    )
+    result: list[GroupResponse] = []
+    for m in memberships:
+        group = db.query(Group).filter(Group.id == m.group_id).first()
+        if not group:
+            continue
+        member_ids = _get_group_member_ids(group.id, db)
+        members = [
+            db.query(User).filter(User.id == uid).first()
+            for uid in member_ids
+        ]
+        result.append(
+            GroupResponse(
+                group_id=group.id,
+                name=group.name,
+                members=[
+                    UserBrief(id=u.id, email=u.email) for u in members if u
+                ],
+            )
+        )
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ENDPOINT 0b — Obtener grupo por ID
+# ══════════════════════════════════════════════════════════════════════════
+@router.get(
+    "/groups/{group_id}",
+    response_model=GroupResponse,
+    summary="Get a single group by ID",
+)
+async def get_group(
+    group_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group = _get_group_or_404(group_id, db)
+    _assert_membership(group, current_user.id, db)
+    member_ids = _get_group_member_ids(group_id, db)
+    members = [
+        db.query(User).filter(User.id == uid).first()
+        for uid in member_ids
+    ]
+    return GroupResponse(
+        group_id=group.id,
+        name=group.name,
+        members=[UserBrief(id=u.id, email=u.email) for u in members if u],
+    )
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 def _get_group_or_404(group_id: str, db: Session) -> Group:
