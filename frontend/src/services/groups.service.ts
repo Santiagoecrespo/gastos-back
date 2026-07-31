@@ -5,18 +5,12 @@ import type {
   ExpenseResponse,
   BalanceResponse,
   SettleResponse,
+  InviteInfo,
+  JoinGroupResult,
 } from "../types";
 
-export async function createGroup(
-  name: string,
-  memberIds: string[],
-  memberEmails: string[] = []
-): Promise<GroupResponse> {
-  const { data } = await client.post<GroupResponse>("/api/groups", {
-    name,
-    member_ids: memberIds,
-    member_emails: memberEmails,
-  });
+export async function createGroup(name: string): Promise<GroupResponse> {
+  const { data } = await client.post<GroupResponse>("/api/groups", { name });
   return data;
 }
 
@@ -63,5 +57,15 @@ export async function settleGroup(
   const { data } = await client.patch<SettleResponse>(
     `/api/groups/${groupId}/settle`
   );
+  return data;
+}
+
+export async function getInviteInfo(inviteToken: string): Promise<InviteInfo> {
+  const { data } = await client.get<InviteInfo>(`/join/${inviteToken}`);
+  return data;
+}
+
+export async function joinGroup(inviteToken: string): Promise<JoinGroupResult> {
+  const { data } = await client.post<JoinGroupResult>(`/join/${inviteToken}`);
   return data;
 }

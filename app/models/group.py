@@ -1,5 +1,6 @@
 """Group ORM model."""
 
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -27,6 +28,13 @@ class Group(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+    invite_token: Mapped[str] = mapped_column(
+        String(32),
+        unique=True,
+        nullable=False,
+        default=lambda: secrets.token_urlsafe(16),
+        index=True,
     )
 
     # Relationships

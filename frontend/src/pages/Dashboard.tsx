@@ -16,8 +16,8 @@ export default function Dashboard() {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [memberEmail, setMemberEmail] = useState("");
-  const [memberEmails, setMemberEmails] = useState<string[]>([]);
+  const [inviteLink, setInviteLink] = useState("");
+  const [copied, setCopied] = useState(false);
   const [modalError, setModalError] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -36,36 +36,14 @@ export default function Dashboard() {
     }
   };
 
-  const addMember = () => {
-    const trimmed = memberEmail.trim().toLowerCase();
-    if (!trimmed) return;
-    if (!trimmed.includes("@")) {
-      setModalError("Ingresá un email válido");
-      return;
-    }
-    if (memberEmails.includes(trimmed)) {
-      setModalError("Ese email ya está agregado");
-      return;
-    }
-    setMemberEmails((prev) => [...prev, trimmed]);
-    setMemberEmail("");
-    setModalError("");
-  };
-
-  const removeMember = (email: string) => {
-    setMemberEmails((prev) => prev.filter((e) => e !== email));
-  };
-
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     if (!groupName.trim()) return;
     setCreating(true);
     setModalError("");
     try {
-      await createGroup(groupName.trim(), [], memberEmails);
-      setShowModal(false);
-      setGroupName("");
-      setMemberEmails([]);
+      const result = await createGroup(groupName.trim());
+      setInviteLink(`${window.location.origin}/join/${result.invite_token}`);
       await fetchGroups();
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
@@ -172,90 +150,91 @@ export default function Dashboard() {
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
             <div className="card w-full max-w-md">
-              <h2 className="text-lg font-bold mb-4">Nuevo grupo</h2>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div>
-                  <label className="text-sm text-gray-400 block mb-1">
-                    Nombre del grupo
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    placeholder="Ej: Asado del domingo"
-                    className="input"
-                    autoFocus
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-gray-400 block mb-1">
-                    Agregar miembros por email
-                  </label>
+              {inviteLink ? (
+                /* ── Step 2: Invite link ── */
+                <div className="space-y-4 text-center">
+                  <div className="text-4xl">✅</div>
+                  <h2 className="text-lg font-bold">Grupo creado</h2>
+                  <p className="text-gray-400 text-sm">
+                    Compartí este link con tus amigos por WhatsApp o donde quieras
+                  </p>
                   <div className="flex gap-2">
                     <input
-                      type="email"
-                      value={memberEmail}
-                      onChange={(e) => setMemberEmail(e.target.value)}
-                      placeholder="amigo@email.com"
-                      className="input flex-1"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addMember();
-                        }
-                      }}
+                      readOnly
+                      value={inviteLink}
+                      className="input flex-1 text-xs"
                     />
                     <button
                       type="button"
-                      onClick={addMember}
-                      className="btn-ghost border border-dark-300 px-3"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(inviteLink);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="btn-primary px-4 whitespace-nowrap"
                     >
-                      +
+                      {copied ? "¡Copiado!" : "Copiar link"}
                     </button>
                   </div>
-                  {memberEmails.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {memberEmails.map((em) => (
-                        <span
-                          key={em}
-                          className="badge gap-1 cursor-pointer hover:border-accent-red/30"
-                          onClick={() => removeMember(em)}
-                        >
-                          {em} <span className="text-accent-red">×</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {modalError && (
-                  <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg px-3 py-2">
-                    <p className="text-accent-red text-sm">{modalError}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => {
                       setShowModal(false);
-                      setModalError("");
+                      setGroupName("");
+                      setInviteLink("");
+                      setCopied(false);
                     }}
-                    className="btn-ghost flex-1"
+                    className="btn-ghost w-full"
                   >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={creating}
-                    className="btn-primary flex-1"
-                  >
-                    {creating ? "Creando..." : "Crear grupo"}
+                    Cerrar
                   </button>
                 </div>
-              </form>
+              ) : (
+                /* ── Step 1: Create form ── */
+                <form onSubmit={handleCreate} className="space-y-4">
+                  <h2 className="text-lg font-bold">Nuevo grupo</h2>
+                  <div>
+                    <label className="text-sm text-gray-400 block mb-1">
+                      Nombre del grupo
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      placeholder="Ej: Asado del domingo"
+                      className="input"
+                      autoFocus
+                    />
+                  </div>
+
+                  {modalError && (
+                    <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg px-3 py-2">
+                      <p className="text-accent-red text-sm">{modalError}</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModal(false);
+                        setModalError("");
+                      }}
+                      className="btn-ghost flex-1"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating}
+                      className="btn-primary flex-1"
+                    >
+                      {creating ? "Creando..." : "Crear grupo"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}

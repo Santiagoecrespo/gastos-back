@@ -1,7 +1,5 @@
 """Pydantic schemas for Group endpoints."""
 
-from datetime import datetime
-
 from pydantic import BaseModel, Field
 
 
@@ -11,14 +9,6 @@ class GroupCreate(BaseModel):
     """Payload for creating a new group."""
 
     name: str = Field(min_length=1, max_length=150, examples=["Asado del domingo"])
-    member_ids: list[str] = Field(
-        default_factory=list,
-        description="User IDs to add as members (creator is added automatically)",
-    )
-    member_emails: list[str] = Field(
-        default_factory=list,
-        description="User emails to add as members (resolved server-side)",
-    )
 
 
 # ── Response schemas ──────────────────────────────────────────────────────
@@ -33,8 +23,25 @@ class UserBrief(BaseModel):
 
 
 class GroupResponse(BaseModel):
-    """Returned after creating a group."""
+    """Returned after creating or listing groups."""
 
     group_id: str
     name: str
     members: list[UserBrief]
+    invite_token: str
+
+
+class InviteInfoResponse(BaseModel):
+    """Returned by GET /join/{invite_token} (public)."""
+
+    group_id: str
+    group_name: str
+    invite_token: str
+
+
+class JoinGroupResponse(BaseModel):
+    """Returned by POST /join/{invite_token}."""
+
+    group_id: str
+    group_name: str
+    message: str
