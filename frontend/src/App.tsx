@@ -1,4 +1,4 @@
-// src/App.tsx — Router principal
+// src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./store/authStore";
 import PrivateRoute from "./components/PrivateRoute";
@@ -16,27 +16,13 @@ export default function App() {
           {/* Public */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/join/:inviteToken" element={<JoinGroup />} />
+          {/* Zero-friction join (no auth required) */}
+          <Route path="/g/:inviteToken" element={<JoinGroup />} />
 
           {/* Protected */}
-          <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/group/:id"
-            element={
-              <PrivateRoute>
-                <GroupDetail />
-              </PrivateRoute>
-            }
-          />
+          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/group/:id" element={<PrivateRoute><GroupDetail /></PrivateRoute>} />
 
-          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

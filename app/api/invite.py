@@ -1,75 +1,103 @@
-"""Invite-link router — public info + protected join endpoints."""
+"""
+Invite-link router (Nametag / Zero-Friction architecture).
+
+Two public endpoints — no JWT required:
+  GET  /api/groups/invite/{invite_token}       -> group info + participant list
+  POST /api/groups/invite/{invite_token}/join  -> magic login, returns guest JWT
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.core.security import create_access_token
 from app.models.group import Group
-from app.models.user import User
-from app.models.user_group import UserGroup
-from app.schemas.group import InviteInfoResponse, JoinGroupResponse
+from app.models.participant import Participant
+from app.schemas.group import InvitePageResponse, JoinResponse, ParticipantOut
 
-router = APIRouter(tags=["invite"])
+router = APIRouter(prefix="/api", tags=["invite"])
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# GET /join/{invite_token} — public, returns group name + token
-# ══════════════════════════════════════════════════════════════════════════
+class JoinRequest(BaseModel):
+    participant_name: str
+
+
 @router.get(
-    "/join/{invite_token}",
-    response_model=InviteInfoResponse,
-    summary="Get group info from an invite token (public)",
+    "/groups/invite/{invite_token}",
+    response_model=InvitePageResponse,
+    summary="Get group info + participant list (public — no auth)",
 )
-def get_invite_info(invite_token: str, db: Session = Depends(get_db)):
+def get_invite_page(invite_token: str, db: Session = Depends(get_db)):
+    """Public endpoint. Returns the group name and existing participants so the
+    frontend can render the pick-your-name screen."""
     group = db.query(Group).filter(Group.invite_token == invite_token).first()
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitación no válida o expirada",
+            detail="Invitacion no valida",
         )
-    return InviteInfoResponse(
+
+    participants = (
+        db.query(Participant).filter(Participant.group_id == group.id).all()
+    )
+    return InvitePageResponse(
         group_id=group.id,
         group_name=group.name,
         invite_token=group.invite_token,
+        participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# POST /join/{invite_token} — requires JWT, joins the group (idempotent)
-# ══════════════════════════════════════════════════════════════════════════
 @router.post(
-    "/join/{invite_token}",
-    response_model=JoinGroupResponse,
-    summary="Join a group via invite token (requires auth)",
+    "/groups/invite/{invite_token}/join",
+    response_model=JoinResponse,
+    summary="Magic login: join by name and receive a group-scoped JWT",
 )
 def join_group(
     invite_token: str,
+    body: JoinRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
+    """If the participant name already exists in this group, reuses it.
+    If it is new, creates a Participant row.
+    Returns a Group-scoped JWT payload: { sub: participant_id, group_id, type: guest }
+    """
     group = db.query(Group).filter(Group.invite_token == invite_token).first()
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitación no válida o expirada",
+            detail="Invitacion no valida",
         )
 
-    already_member = (
-        db.query(UserGroup)
-        .filter(
-            UserGroup.group_id == group.id,
-            UserGroup.user_id == current_user.id,
+    name = body.participant_name.strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El nombre no puede estar vacio",
         )
+
+    participant = (
+        db.query(Participant)
+        .filter(Participant.group_id == group.id, Participant.name == name)
         .first()
     )
-
-    if not already_member:
-        db.add(UserGroup(group_id=group.id, user_id=current_user.id))
+    if not participant:
+        participant = Participant(name=name, group_id=group.id)
+        db.add(participant)
         db.commit()
+        db.refresh(participant)
 
-    return JoinGroupResponse(
+    token = create_access_token(data={
+        "sub": participant.id,
+        "group_id": group.id,
+        "type": "guest",
+    })
+
+    return JoinResponse(
+        participant_id=participant.id,
+        participant_name=participant.name,
         group_id=group.id,
         group_name=group.name,
-        message="Te uniste al grupo",
+        token=token,
     )

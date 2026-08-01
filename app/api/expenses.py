@@ -1,22 +1,25 @@
 """
-Expenses router — group management, expense tracking, balances, and settlement.
+Expenses router — groups, expenses, balances, settlement.
 
-All endpoints require authentication via ``Depends(get_current_user)``.
+REFACTORED to Participant / nametag architecture:
+  - list_groups / create_group  → use standard User JWT (group creator)
+  - get_group / create_expense / get_balances / settle_group → use Guest JWT (Participant)
 """
 
+import secrets as _secrets
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_participant
 from app.models.user import User
 from app.models.group import Group
-from app.models.user_group import UserGroup
+from app.models.participant import Participant
 from app.models.expense import Expense
 from app.models.expense_share import ExpenseShare
-from app.schemas.group import GroupCreate, GroupResponse, UserBrief
+from app.schemas.group import GroupCreate, GroupResponse, ParticipantOut
 from app.schemas.expense import (
     ExpenseCreate,
     ExpenseResponse,
@@ -30,177 +33,154 @@ from app.services.inflation_service import adjust_for_inflation
 router = APIRouter(tags=["expenses"])
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+def _get_group_or_404(group_id: str, db: Session) -> Group:
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo no encontrado")
+    return group
+
+
+def _get_participants(group_id: str, db: Session) -> list[Participant]:
+    return db.query(Participant).filter(Participant.group_id == group_id).all()
+
+
+def _assert_in_group(participant: Participant, group_id: str) -> None:
+    if participant.group_id != group_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes acceso a este grupo")
+
+
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 0a — Listar grupos del usuario
+# ENDPOINT 0a — Listar grupos del usuario (JWT de usuario)
 # ══════════════════════════════════════════════════════════════════════════
 @router.get(
     "/groups",
     response_model=list[GroupResponse],
-    summary="List all groups for the current user",
+    summary="List groups created by the authenticated user",
 )
 async def list_groups(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return every group the authenticated user belongs to."""
-    memberships = (
-        db.query(UserGroup)
-        .filter(UserGroup.user_id == current_user.id)
-        .all()
-    )
-    result: list[GroupResponse] = []
-    for m in memberships:
-        group = db.query(Group).filter(Group.id == m.group_id).first()
-        if not group:
-            continue
-        member_ids = _get_group_member_ids(group.id, db)
-        members = [
-            db.query(User).filter(User.id == uid).first()
-            for uid in member_ids
-        ]
-        result.append(
-            GroupResponse(
-                group_id=group.id,
-                name=group.name,
-                members=[
-                    UserBrief(id=u.id, email=u.email) for u in members if u
-                ],
-                invite_token=group.invite_token,
-            )
-        )
+    """Returns all groups where the user is the creator (for the dashboard)."""
+    groups = db.query(Group).filter(Group.created_by == current_user.id).all()
+    result = []
+    for group in groups:
+        participants = _get_participants(group.id, db)
+        result.append(GroupResponse(
+            group_id=group.id,
+            name=group.name,
+            invite_token=group.invite_token,
+            participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
+        ))
     return result
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 0b — Obtener grupo por ID
+# ENDPOINT 0b — Obtener grupo por ID (JWT de participante/guest)
 # ══════════════════════════════════════════════════════════════════════════
 @router.get(
     "/groups/{group_id}",
     response_model=GroupResponse,
-    summary="Get a single group by ID",
+    summary="Get group detail (guest JWT required)",
 )
 async def get_group(
     group_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    participant: Participant = Depends(get_current_participant),
 ):
+    """Returns group with participants list. Requires a group-scoped guest JWT."""
+    _assert_in_group(participant, group_id)
     group = _get_group_or_404(group_id, db)
-    _assert_membership(group, current_user.id, db)
-    member_ids = _get_group_member_ids(group_id, db)
-    members = [
-        db.query(User).filter(User.id == uid).first()
-        for uid in member_ids
-    ]
+    participants = _get_participants(group_id, db)
     return GroupResponse(
         group_id=group.id,
         name=group.name,
-        members=[UserBrief(id=u.id, email=u.email) for u in members if u],
         invite_token=group.invite_token,
+        participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
     )
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────
-
-def _get_group_or_404(group_id: str, db: Session) -> Group:
-    """Return the Group or raise 404."""
-    group = db.query(Group).filter(Group.id == group_id).first()
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Grupo no encontrado",
-        )
-    return group
-
-
-def _assert_membership(group: Group, user_id: str, db: Session) -> None:
-    """Raise 403 if the user is not a member of the group."""
-    is_member = (
-        db.query(UserGroup)
-        .filter(UserGroup.group_id == group.id, UserGroup.user_id == user_id)
-        .first()
-    )
-    if not is_member:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No sos miembro de este grupo",
-        )
-
-
-def _get_group_member_ids(group_id: str, db: Session) -> list[str]:
-    """Return a list of user IDs that belong to the group."""
-    rows = db.query(UserGroup.user_id).filter(UserGroup.group_id == group_id).all()
-    return [r[0] for r in rows]
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 1 — Crear grupo
+# ENDPOINT 1 — Crear grupo (JWT de usuario)
 # ══════════════════════════════════════════════════════════════════════════
 @router.post(
     "/groups",
     response_model=GroupResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a new expense group",
+    summary="Create a new group (user JWT required)",
 )
 async def create_group(
     payload: GroupCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a group. The creator is automatically added as the first member."""
-    members: list[User] = [current_user]
-
-    # Create group (invite_token auto-generated by the model default)
-    group = Group(name=payload.name, created_by=current_user.id)
+    """Creates a group and optionally pre-populates Participants from names list.
+    The invite_token is auto-generated and returned for sharing.
+    """
+    group = Group(
+        name=payload.name,
+        created_by=current_user.id,
+        invite_token=_secrets.token_urlsafe(12),
+    )
     db.add(group)
-    db.flush()  # get group.id before creating UserGroup rows
+    db.flush()
 
-    # Add creator as sole initial member
-    db.add(UserGroup(group_id=group.id, user_id=current_user.id))
+    participants: list[Participant] = []
+    for raw_name in payload.participant_names:
+        name = raw_name.strip()
+        if name:
+            p = Participant(name=name, group_id=group.id)
+            db.add(p)
+            participants.append(p)
 
     db.commit()
     db.refresh(group)
+    for p in participants:
+        db.refresh(p)
 
     return GroupResponse(
         group_id=group.id,
         name=group.name,
-        members=[UserBrief(id=u.id, email=u.email) for u in members],
         invite_token=group.invite_token,
+        participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 2 — Registrar gasto
+# ENDPOINT 2 — Registrar gasto (JWT de participante/guest)
 # ══════════════════════════════════════════════════════════════════════════
 @router.post(
     "/groups/{group_id}/expenses",
     response_model=ExpenseResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new expense and split equally",
+    summary="Register an expense split equally among participants (guest JWT)",
 )
 async def create_expense(
     group_id: str,
     payload: ExpenseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    participant: Participant = Depends(get_current_participant),
 ):
-    """Register an expense, split it equally among all group members,
-    and persist one ``ExpenseShare`` per member.
-    """
-    group = _get_group_or_404(group_id, db)
-    _assert_membership(group, current_user.id, db)
+    _assert_in_group(participant, group_id)
+    _get_group_or_404(group_id, db)
 
-    # Validate payer is a member
-    member_ids = _get_group_member_ids(group_id, db)
-    if payload.payer_id not in member_ids:
+    payer = db.query(Participant).filter(
+        Participant.id == payload.payer_id,
+        Participant.group_id == group_id,
+    ).first()
+    if not payer:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El pagador {payload.payer_id} no es miembro del grupo",
+            detail="El pagador no es participante de este grupo",
         )
 
-    # Create expense
+    all_participants = _get_participants(group_id, db)
+
     expense = Expense(
-        group_id=group.id,
-        payer_id=payload.payer_id,
+        group_id=group_id,
+        payer_id=payer.id,
         amount=payload.amount,
         description=payload.description,
         date=payload.date,
@@ -208,18 +188,16 @@ async def create_expense(
     db.add(expense)
     db.flush()
 
-    # Split equally
-    split_per_person = round(payload.amount / len(member_ids), 2)
-
+    split_per_person = round(payload.amount / len(all_participants), 2)
     shares_out: list[ShareOut] = []
-    for uid in member_ids:
+    for p in all_participants:
         share = ExpenseShare(
             expense_id=expense.id,
-            user_id=uid,
+            participant_id=p.id,
             amount_owed=split_per_person,
         )
         db.add(share)
-        shares_out.append(ShareOut(user_id=uid, amount_owed=split_per_person))
+        shares_out.append(ShareOut(participant_id=p.id, amount_owed=split_per_person))
 
     db.commit()
     db.refresh(expense)
@@ -233,27 +211,27 @@ async def create_expense(
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 3 — Balance del grupo (inflation-adjusted + minimum cash flow)
+# ENDPOINT 3 — Balance del grupo ajustado por inflacion (guest JWT)
 # ══════════════════════════════════════════════════════════════════════════
 @router.get(
     "/groups/{group_id}/balances",
     response_model=BalanceResponse,
-    summary="Get inflation-adjusted balances and optimised transfers",
+    summary="Get inflation-adjusted balances using minimum-cash-flow (guest JWT)",
 )
 async def get_balances(
     group_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    participant: Participant = Depends(get_current_participant),
 ):
-    group = _get_group_or_404(group_id, db)
-    _assert_membership(group, current_user.id, db)
+    _assert_in_group(participant, group_id)
+    _get_group_or_404(group_id, db)
 
-    member_ids = _get_group_member_ids(group_id, db)
+    all_participants = _get_participants(group_id, db)
+    participant_map: dict[str, ParticipantOut] = {
+        p.id: ParticipantOut(id=p.id, name=p.name) for p in all_participants
+    }
+    net: dict[str, float] = {p.id: 0.0 for p in all_participants}
 
-    # ── PASO 1: Balance neto ajustado por usuario ─────────────────────
-    net: dict[str, float] = {uid: 0.0 for uid in member_ids}
-
-    # Unsettled expenses for this group
     expenses = (
         db.query(Expense)
         .filter(Expense.group_id == group_id, Expense.is_settled == False)  # noqa: E712
@@ -266,93 +244,69 @@ async def get_balances(
         info = await adjust_for_inflation(expense.amount, expense.date, today)
         adjusted_amount = info["adjusted"]
 
-        # Credit the payer
         if expense.payer_id in net:
             net[expense.payer_id] += adjusted_amount
 
-        # Debit each share holder (adjusted proportionally)
         original_total = expense.amount
         for share in expense.shares:
-            if share.user_id in net:
-                # Proportion of this share relative to original total
+            if share.participant_id in net:
                 proportion = share.amount_owed / original_total if original_total else 0
-                net[share.user_id] -= adjusted_amount * proportion
+                net[share.participant_id] -= adjusted_amount * proportion
 
-    # ── PASO 2: Minimum Cash Flow (greedy) ────────────────────────────
-    # Build creditor/debtor lists (ignore tiny rounding diffs)
     creditors: list[tuple[str, float]] = []
     debtors: list[tuple[str, float]] = []
-
-    for uid, balance in net.items():
+    for pid, balance in net.items():
         if balance > 0.01:
-            creditors.append((uid, balance))
+            creditors.append((pid, balance))
         elif balance < -0.01:
-            debtors.append((uid, -balance))  # store as positive
+            debtors.append((pid, -balance))
 
-    # Sort both by amount descending
     creditors.sort(key=lambda x: x[1], reverse=True)
     debtors.sort(key=lambda x: x[1], reverse=True)
 
-    # Build a user lookup for the response
-    user_map: dict[str, UserBrief] = {}
-    for uid in member_ids:
-        user = db.query(User).filter(User.id == uid).first()
-        if user:
-            user_map[uid] = UserBrief(id=user.id, email=user.email)
-
     transactions: list[BalanceTransaction] = []
-    ci = 0  # creditor index
-    di = 0  # debtor index
-
+    ci = di = 0
     while ci < len(creditors) and di < len(debtors):
         creditor_id, credit = creditors[ci]
         debtor_id, debt = debtors[di]
-
         transfer = min(credit, debt)
-
         if transfer >= 0.01:
-            transactions.append(
-                BalanceTransaction(
-                    from_user=user_map[debtor_id],
-                    to_user=user_map[creditor_id],
-                    amount_adjusted=round(transfer, 2),
-                    reference_date=today,
-                )
-            )
-
+            transactions.append(BalanceTransaction(
+                from_participant=participant_map[debtor_id],
+                to_participant=participant_map[creditor_id],
+                amount_adjusted=round(transfer, 2),
+                reference_date=today,
+            ))
         creditors[ci] = (creditor_id, credit - transfer)
         debtors[di] = (debtor_id, debt - transfer)
-
         if creditors[ci][1] < 0.01:
             ci += 1
         if debtors[di][1] < 0.01:
             di += 1
 
-    all_settled = len(expenses) == 0
-
     return BalanceResponse(
-        group_id=group.id,
+        group_id=group_id,
         balances=transactions,
         total_transactions=len(transactions),
-        all_settled=all_settled,
+        all_settled=len(expenses) == 0,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 4 — Marcar grupo como saldado
+# ENDPOINT 4 — Saldar grupo (guest JWT)
 # ══════════════════════════════════════════════════════════════════════════
 @router.patch(
     "/groups/{group_id}/settle",
     response_model=SettleResponse,
-    summary="Mark all pending expenses as settled",
+    summary="Mark all pending expenses as settled (guest JWT)",
 )
 async def settle_group(
     group_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    participant: Participant = Depends(get_current_participant),
 ):
-    group = _get_group_or_404(group_id, db)
-    _assert_membership(group, current_user.id, db)
+    _assert_in_group(participant, group_id)
+    _get_group_or_404(group_id, db)
 
     count = (
         db.query(Expense)
@@ -360,8 +314,4 @@ async def settle_group(
         .update({Expense.is_settled: True})
     )
     db.commit()
-
-    return SettleResponse(
-        message="Grupo saldado correctamente",
-        expenses_settled=count,
-    )
+    return SettleResponse(message="Grupo saldado correctamente", expenses_settled=count)

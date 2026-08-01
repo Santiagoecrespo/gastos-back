@@ -24,7 +24,7 @@ class Expense(Base):
     )
     payer_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.id"),
+        ForeignKey("participants.id"),  # was ForeignKey("users.id")
         nullable=False,
     )
     amount: Mapped[float] = mapped_column(Float, nullable=False)
@@ -34,7 +34,7 @@ class Expense(Base):
 
     # Relationships
     group: Mapped["Group"] = relationship("Group", back_populates="expenses")
-    payer: Mapped["User"] = relationship("User", back_populates="paid_expenses")
+    payer: Mapped["Participant"] = relationship("Participant", back_populates="paid_expenses")  # was User
     shares: Mapped[list["ExpenseShare"]] = relationship(
         "ExpenseShare",
         back_populates="expense",

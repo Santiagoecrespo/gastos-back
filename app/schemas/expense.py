@@ -1,33 +1,27 @@
-"""Pydantic schemas for Expense and Balance endpoints."""
+﻿"""Pydantic schemas for Expense and Balance endpoints (Participant architecture)."""
 
 from datetime import date
 
 from pydantic import BaseModel, Field
 
-from app.schemas.group import UserBrief
+from app.schemas.group import ParticipantOut
 
 
 # ── Expense request / response ────────────────────────────────────────────
 
 class ExpenseCreate(BaseModel):
-    """Payload for registering a new expense."""
-
-    amount: float = Field(gt=0, description="Must be greater than 0")
-    description: str = Field(min_length=1, examples=["Asado"])
+    amount: float = Field(gt=0)
+    description: str = Field(min_length=1)
     date: date
-    payer_id: str
+    payer_id: str  # Participant.id
 
 
 class ShareOut(BaseModel):
-    """Single share in an expense split."""
-
-    user_id: str
+    participant_id: str  # was user_id
     amount_owed: float
 
 
 class ExpenseResponse(BaseModel):
-    """Returned after creating an expense."""
-
     expense_id: str
     amount: float
     split_per_person: float
@@ -37,17 +31,13 @@ class ExpenseResponse(BaseModel):
 # ── Balance response ──────────────────────────────────────────────────────
 
 class BalanceTransaction(BaseModel):
-    """A single optimised transfer suggested by the minimum-cash-flow algorithm."""
-
-    from_user: UserBrief
-    to_user: UserBrief
+    from_participant: ParticipantOut  # was from_user: UserBrief
+    to_participant: ParticipantOut    # was to_user: UserBrief
     amount_adjusted: float
     reference_date: date
 
 
 class BalanceResponse(BaseModel):
-    """Full balance breakdown for a group."""
-
     group_id: str
     balances: list[BalanceTransaction]
     total_transactions: int
@@ -57,7 +47,5 @@ class BalanceResponse(BaseModel):
 # ── Settle response ───────────────────────────────────────────────────────
 
 class SettleResponse(BaseModel):
-    """Returned after settling all pending expenses in a group."""
-
     message: str
     expenses_settled: int

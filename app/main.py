@@ -24,24 +24,38 @@ from app.api.invite import router as invite_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create tables on startup and run lightweight column migrations."""
-    Base.metadata.create_all(bind=engine)
-    # Migration: add invite_token to groups if missing (safe to re-run)
+    """Schema migration + table creation on startup."""
     with engine.connect() as conn:
         inspector = sa_inspect(engine)
-        existing_cols = [c["name"] for c in inspector.get_columns("groups")]
-        if "invite_token" not in existing_cols:
-            conn.execute(text(
-                "ALTER TABLE groups ADD COLUMN invite_token VARCHAR(32) DEFAULT ''"
-            ))
-            import secrets as _sec
-            rows = conn.execute(text("SELECT id FROM groups")).fetchall()
-            for (gid,) in rows:
-                conn.execute(
-                    text("UPDATE groups SET invite_token = :tok WHERE id = :gid"),
-                    {"tok": _sec.token_urlsafe(16), "gid": gid},
-                )
-            conn.commit()
+        tables = inspector.get_table_names()
+
+        # Drop tables with old User-based FK schema so create_all can recreate them
+        if "expense_shares" in tables:
+            old_cols = [c["name"] for c in inspector.get_columns("expense_shares")]
+            if "participant_id" not in old_cols:
+                conn.execute(text("DROP TABLE IF EXISTS expense_shares"))
+                conn.execute(text("DROP TABLE IF EXISTS expenses"))
+                conn.execute(text("DROP TABLE IF EXISTS user_groups"))
+                conn.commit()
+
+        # Add invite_token to groups if missing (pre-Participant era tables)
+        if "groups" in tables:
+            g_cols = [c["name"] for c in inspector.get_columns("groups")]
+            if "invite_token" not in g_cols:
+                conn.execute(text(
+                    "ALTER TABLE groups ADD COLUMN invite_token VARCHAR(32) DEFAULT ''"
+                ))
+                import secrets as _sec
+                rows = conn.execute(text("SELECT id FROM groups")).fetchall()
+                for (gid,) in rows:
+                    conn.execute(
+                        text("UPDATE groups SET invite_token = :tok WHERE id = :gid"),
+                        {"tok": _sec.token_urlsafe(12), "gid": gid},
+                    )
+                conn.commit()
+
+    # Create all tables (new ones + recreated ones)
+    Base.metadata.create_all(bind=engine)
     yield
 
 
@@ -65,7 +79,8 @@ app.add_middleware(
 
 # ── Register routers ─────────────────────────────────────────────────────
 app.include_router(auth_router)
-app.include_router(expenses_router, prefix="/api")app.include_router(invite_router)  # /join/{token} — no /api prefix
+app.include_router(expenses_router, prefix="/api")
+app.include_router(invite_router)  # already has /api prefix built-in
 
 @app.get("/health", tags=["ops"])
 async def health_check():

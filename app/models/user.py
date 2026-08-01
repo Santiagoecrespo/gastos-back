@@ -31,22 +31,10 @@ class User(Base):
     )
 
     # Relationships
+    # Only kept: groups created by this user (for dashboard listing)
     created_groups: Mapped[list["Group"]] = relationship(
         "Group",
         back_populates="creator",
-    )
-    memberships: Mapped[list["UserGroup"]] = relationship(
-        "UserGroup",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    paid_expenses: Mapped[list["Expense"]] = relationship(
-        "Expense",
-        back_populates="payer",
-    )
-    expense_shares: Mapped[list["ExpenseShare"]] = relationship(
-        "ExpenseShare",
-        back_populates="user",
     )
 
     def __repr__(self) -> str:

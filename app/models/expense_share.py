@@ -1,4 +1,4 @@
-"""ExpenseShare ORM model — how much each user owes for a given expense."""
+"""ExpenseShare ORM model — how much each Participant owes for a given expense."""
 
 import uuid
 
@@ -22,16 +22,17 @@ class ExpenseShare(Base):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[str] = mapped_column(
+    # Renamed from user_id; now references Participant instead of User
+    participant_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("users.id"),
+        ForeignKey("participants.id", ondelete="CASCADE"),
         nullable=False,
     )
     amount_owed: Mapped[float] = mapped_column(Float, nullable=False)
 
     # Relationships
     expense: Mapped["Expense"] = relationship("Expense", back_populates="shares")
-    user: Mapped["User"] = relationship("User", back_populates="expense_shares")
+    participant: Mapped["Participant"] = relationship("Participant", back_populates="expense_shares")
 
     def __repr__(self) -> str:
-        return f"<ExpenseShare user={self.user_id} owes={self.amount_owed}>"
+        return f"<ExpenseShare participant={self.participant_id} owes={self.amount_owed}>"

@@ -39,8 +39,9 @@ class Group(Base):
 
     # Relationships
     creator: Mapped["User"] = relationship("User", back_populates="created_groups")
-    members: Mapped[list["UserGroup"]] = relationship(
-        "UserGroup",
+    # Replaced UserGroup many-to-many with direct Participant one-to-many
+    participants: Mapped[list["Participant"]] = relationship(
+        "Participant",
         back_populates="group",
         cascade="all, delete-orphan",
     )

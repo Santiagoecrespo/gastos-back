@@ -16,6 +16,7 @@ export default function Dashboard() {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [participantNamesRaw, setParticipantNamesRaw] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -42,8 +43,12 @@ export default function Dashboard() {
     setCreating(true);
     setModalError("");
     try {
-      const result = await createGroup(groupName.trim());
-      setInviteLink(`${window.location.origin}/join/${result.invite_token}`);
+      const names = participantNamesRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const result = await createGroup(groupName.trim(), names);
+      setInviteLink(`${window.location.origin}/g/${result.invite_token}`);
       await fetchGroups();
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
@@ -121,23 +126,23 @@ export default function Dashboard() {
             {groups.map((group) => (
               <button
                 key={group.group_id}
-                onClick={() => navigate(`/group/${group.group_id}`)}
+                onClick={() => navigate(`/g/${group.invite_token}`)}
                 className="card text-left hover:border-accent-green/30 cursor-pointer"
               >
                 <h3 className="font-semibold text-gray-100 mb-2">{group.name}</h3>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <span>👥</span>
-                  <span>{group.members.length} miembros</span>
+                  <span>{group.participants.length} integrantes</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1">
-                  {group.members.slice(0, 3).map((m) => (
-                    <span key={m.id} className="badge text-xs">
-                      {m.email.split("@")[0]}
+                  {group.participants.slice(0, 3).map((p) => (
+                    <span key={p.id} className="badge text-xs">
+                      {p.name}
                     </span>
                   ))}
-                  {group.members.length > 3 && (
+                  {group.participants.length > 3 && (
                     <span className="badge text-xs">
-                      +{group.members.length - 3}
+                      +{group.participants.length - 3}
                     </span>
                   )}
                 </div>
@@ -208,6 +213,19 @@ export default function Dashboard() {
                     />
                   </div>
 
+                  <div>
+                    <label className="text-sm text-gray-400 block mb-1">
+                      Integrantes <span className="text-gray-600">(opcional, separados por coma)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={participantNamesRaw}
+                      onChange={(e) => setParticipantNamesRaw(e.target.value)}
+                      placeholder="Ej: Juan, María, Pedro"
+                      className="input"
+                    />
+                  </div>
+
                   {modalError && (
                     <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg px-3 py-2">
                       <p className="text-accent-red text-sm">{modalError}</p>
@@ -219,6 +237,10 @@ export default function Dashboard() {
                       type="button"
                       onClick={() => {
                         setShowModal(false);
+                        setGroupName("");
+                        setParticipantNamesRaw("");
+                        setInviteLink("");
+                        setCopied(false);
                         setModalError("");
                       }}
                       className="btn-ghost flex-1"
