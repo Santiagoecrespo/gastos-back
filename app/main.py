@@ -70,7 +70,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://gastos-back-production-e3ec.up.railway.app",
+        "https://gastos-back-o4ug.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
