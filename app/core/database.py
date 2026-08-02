@@ -1,18 +1,23 @@
 """
-Database engine and session configuration.
-
-Uses SQLite locally (app.db) but is structured so swapping the connection
-string to PostgreSQL later requires changing only SQLALCHEMY_DATABASE_URL.
+Database configuration — PostgreSQL in production, SQLite locally.
+Set DATABASE_URL env var (Railway provides it automatically for Postgres addon).
 """
 
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./app.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./app.db")
+
+# Railway provides postgres:// but SQLAlchemy requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+_is_sqlite = DATABASE_URL.startswith("sqlite")
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},  # Required for SQLite only
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
