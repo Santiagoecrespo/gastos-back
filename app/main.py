@@ -72,6 +72,7 @@ app.add_middleware(
         "http://localhost:5173",
         "https://gastos-back-o4ug.vercel.app",
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
