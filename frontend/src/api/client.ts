@@ -32,7 +32,9 @@ client.interceptors.request.use(
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Only force-logout on 401 if it's NOT an auth endpoint (avoid login redirect loop)
+    const url = error.config?.url ?? "";
+    if (error.response?.status === 401 && !url.includes("/auth/")) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       window.location.href = "/login";
