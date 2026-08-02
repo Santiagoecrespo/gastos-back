@@ -18,10 +18,11 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           {/* Zero-friction join (no auth required) */}
           <Route path="/g/:inviteToken" element={<JoinGroup />} />
+          {/* Group detail uses guest JWT from localStorage — no user auth needed */}
+          <Route path="/group/:id" element={<GroupDetail />} />
 
           {/* Protected */}
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/group/:id" element={<PrivateRoute><GroupDetail /></PrivateRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
