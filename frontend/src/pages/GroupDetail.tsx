@@ -177,6 +177,7 @@ export default function GroupDetail() {
               {storedParticipant && (
                 <span className="ml-2 text-accent-green">• {storedParticipant.name}</span>
               )}
+            </p>
           </div>
         </div>
 

@@ -55,15 +55,3 @@ export default function BalanceCard({ transaction, currentParticipantId }: Props
     </div>
   );
 }
-              ? "text-accent-red"
-              : iCreditor
-              ? "text-accent-green"
-              : "text-gray-300"
-          }`}
-        >
-          {formattedAmount}
-        </span>
-      </div>
-    </div>
-  );
-}
