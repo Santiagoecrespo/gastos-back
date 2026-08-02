@@ -68,7 +68,6 @@ export interface SettleResponse {
   message: string;
   expenses_settled: number;
 }
-}
 
 export interface AuthUser {
   id: string;
