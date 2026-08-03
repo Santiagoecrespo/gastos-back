@@ -129,6 +129,19 @@ async def create_group(
     db.flush()
 
     participants: list[Participant] = []
+
+    # Auto-add creator as first participant using their email username
+    creator_name = current_user.email.split("@")[0]
+    existing_names_lower = {n.strip().lower() for n in payload.participant_names if n.strip()}
+    if creator_name.lower() not in existing_names_lower:
+        creator_p = Participant(
+            name=creator_name,
+            group_id=group.id,
+            mp_alias=current_user.mp_alias,
+        )
+        db.add(creator_p)
+        participants.append(creator_p)
+
     for raw_name in payload.participant_names:
         name = raw_name.strip()
         if name:

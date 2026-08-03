@@ -22,6 +22,13 @@ export default function GroupDetail() {
     : null;
   const currentParticipantId: string = storedParticipant?.id || "";
 
+  // Current participant always first, rest alphabetical
+  const sortedParticipants = (group?.participants ?? []).slice().sort((a, b) => {
+    if (a.id === currentParticipantId) return -1;
+    if (b.id === currentParticipantId) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   const [group, setGroup] = useState<GroupResponse | null>(null);
   const [balanceData, setBalanceData] = useState<BalanceResponse | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("expense");
@@ -259,6 +266,37 @@ export default function GroupDetail() {
               </div>
             </div>
 
+            {/* Preview en tiempo real */}
+            {parseFloat(amount) > 0 && sortedParticipants.length > 0 && (
+              <div className="bg-dark-50 border border-dark-300 rounded-lg p-3 space-y-1">
+                <p className="text-sm text-gray-400 mb-2">💰 División estimada:</p>
+                {sortedParticipants.map((p) => {
+                  const total = parseFloat(amount) || 0;
+                  const splitBase = total / sortedParticipants.length;
+                  const contrib = parseFloat(contributions[p.id] || "0") || 0;
+                  const pending = splitBase - contrib;
+                  const isMe = p.id === currentParticipantId;
+                  return (
+                    <div key={p.id} className="flex justify-between text-sm">
+                      <span className={isMe ? "text-accent-green" : "text-gray-300"}>
+                        {p.name}{isMe ? " (Tú)" : ""}
+                      </span>
+                      {pending <= 0 ? (
+                        <span className="text-accent-green">✅ Ya está cubierto</span>
+                      ) : (
+                        <span>
+                          <span className="text-gray-100">${Math.round(pending).toLocaleString("es-AR")}</span>
+                          {contrib > 0 && (
+                            <span className="text-gray-600 text-xs"> (aportó ${Math.round(contrib).toLocaleString("es-AR")})</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div>
               <label className="text-sm text-gray-400 block mb-1">
                 ¿Quién pagó?
@@ -268,9 +306,9 @@ export default function GroupDetail() {
                 onChange={(e) => setPayerId(e.target.value)}
                 className="input"
               >
-              {group?.participants.map((p) => (
+              {sortedParticipants.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}{p.id === currentParticipantId ? " (Yo)" : ""}
+                    {p.name}{p.id === currentParticipantId ? " (Tú)" : ""}
                   </option>
                 ))}
               </select>
@@ -285,22 +323,31 @@ export default function GroupDetail() {
                 Si alguien trajo algo antes de dividir, ingresá el monto acá
               </p>
               <div className="space-y-2">
-                {group?.participants.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2">
-                    <span className="text-sm text-gray-300 flex-1">{p.name}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={contributions[p.id] ?? ""}
-                      onChange={(e) =>
-                        setContributions((prev) => ({ ...prev, [p.id]: e.target.value }))
-                      }
-                      placeholder="ej: 2000"
-                      className="input w-32 text-sm"
-                    />
-                  </div>
-                ))}
+                {sortedParticipants.map((p) => {
+                  const isMe = p.id === currentParticipantId;
+                  return (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <span className={`text-sm flex-1 ${isMe ? "text-accent-green" : "text-gray-400"}`}>
+                        {p.name}{isMe ? " (Tú)" : ""}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={contributions[p.id] ?? ""}
+                        onChange={(e) =>
+                          setContributions((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                        placeholder="ej: 2000"
+                        className={`input w-32 text-sm ${
+                          !isMe ? "opacity-40 cursor-not-allowed" : ""
+                        }`}
+                        disabled={!isMe}
+                        title={!isMe ? `Solo ${p.name} puede editar su aporte` : undefined}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

@@ -80,6 +80,16 @@ export interface SettleResponse {
   expenses_settled: number;
 }
 
+export interface PaymentButtonProps {
+  alias: string | null;
+  amount: number;
+}
+
+export interface ToastState {
+  message: string;
+  visible: boolean;
+}
+
 export interface AuthUser {
   id: string;
   email: string;

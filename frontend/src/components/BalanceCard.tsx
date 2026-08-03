@@ -1,6 +1,6 @@
 // src/components/BalanceCard.tsx
-import { useState } from "react";
 import type { BalanceTransaction } from "../types";
+import PaymentButtons from "./PaymentButtons";
 
 interface Props {
   transaction: BalanceTransaction;
@@ -9,7 +9,6 @@ interface Props {
 
 export default function BalanceCard({ transaction, currentParticipantId }: Props) {
   const { from_participant, to_participant, amount_adjusted } = transaction;
-  const [copied, setCopied] = useState(false);
 
   const iDebtor = from_participant.id === currentParticipantId;
   const iCreditor = to_participant.id === currentParticipantId;
@@ -34,36 +33,32 @@ export default function BalanceCard({ transaction, currentParticipantId }: Props
     textContent = `${from_participant.name} le debe ${formattedAmount} a ${to_participant.name}`;
   }
 
-  const handleCopyAlias = async () => {
-    if (!to_participant.mp_alias) return;
-    await navigator.clipboard.writeText(to_participant.mp_alias);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className={`rounded-xl border p-4 transition-all duration-200 ${bgClass}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-100 leading-relaxed">{textContent}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2">
             <span className="badge">
               <span>📈</span>
               Ajustado por inflación
             </span>
           </div>
-          {to_participant.mp_alias && (
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-gray-400">
-                📲 Transferí a: <span className="text-gray-200">{to_participant.mp_alias}</span>
-              </span>
-              <button
-                onClick={handleCopyAlias}
-                className="text-xs text-accent-green hover:underline"
-              >
-                {copied ? "¡Copiado!" : "Copiar alias"}
-              </button>
-            </div>
+
+          {/* Alias y botones de pago — solo visible al deudor */}
+          {iDebtor && (
+            to_participant.mp_alias ? (
+              <>
+                <p className="mt-2 text-xs text-gray-400">
+                  📲 Alias: <span className="text-gray-200 font-medium">{to_participant.mp_alias}</span>
+                </p>
+                <PaymentButtons alias={to_participant.mp_alias} amount={amount_adjusted} />
+              </>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">
+                ⚠️ {to_participant.name} no cargó su alias de pago aún
+              </p>
+            )
           )}
         </div>
         <span
