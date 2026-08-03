@@ -3,7 +3,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../hooks/useAuth";
-import { createGroup, getGroups } from "../services/groups.service";
+import { createGroup, getGroups, deleteGroup } from "../services/groups.service";
 import type { GroupResponse } from "../types";
 
 export default function Dashboard() {
@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false);
   const [modalError, setModalError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null); // group_id to confirm
 
   useEffect(() => {
     fetchGroups();
@@ -59,6 +60,17 @@ export default function Dashboard() {
       }
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDelete = async (groupId: string) => {
+    try {
+      await deleteGroup(groupId);
+      setGroups((prev) => prev.filter((g) => g.group_id !== groupId));
+    } catch {
+      setError("No se pudo eliminar el grupo");
+    } finally {
+      setConfirmDelete(null);
     }
   };
 
@@ -124,29 +136,56 @@ export default function Dashboard() {
         {!loading && groups.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {groups.map((group) => (
-              <button
-                key={group.group_id}
-                onClick={() => navigate(`/g/${group.invite_token}`)}
-                className="card text-left hover:border-accent-green/30 cursor-pointer"
-              >
-                <h3 className="font-semibold text-gray-100 mb-2">{group.name}</h3>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <span>👥</span>
-                  <span>{group.participants.length} integrantes</span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {group.participants.slice(0, 3).map((p) => (
-                    <span key={p.id} className="badge text-xs">
-                      {p.name}
-                    </span>
-                  ))}
-                  {group.participants.length > 3 && (
-                    <span className="badge text-xs">
-                      +{group.participants.length - 3}
-                    </span>
+              <div key={group.group_id} className="card relative hover:border-accent-green/30 transition-all">
+                {/* Delete button */}
+                <div className="absolute top-3 right-3">
+                  {confirmDelete === group.group_id ? (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(group.group_id); }}
+                        className="text-xs px-2 py-1 rounded bg-accent-red/20 text-accent-red hover:bg-accent-red/30 transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}
+                        className="text-xs px-2 py-1 rounded bg-dark-300 text-gray-400 hover:text-gray-200 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(group.group_id); }}
+                      className="text-gray-600 hover:text-accent-red transition-colors text-lg leading-none"
+                      title="Eliminar grupo"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
-              </button>
+
+                <button
+                  onClick={() => navigate(`/g/${group.invite_token}`)}
+                  className="text-left w-full"
+                >
+                  <h3 className="font-semibold text-gray-100 mb-2 pr-6">{group.name}</h3>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span>👥</span>
+                    <span>{group.participants.length} integrantes</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {group.participants.slice(0, 3).map((p) => (
+                      <span key={p.id} className="badge text-xs">
+                        {p.name}
+                      </span>
+                    ))}
+                    {group.participants.length > 3 && (
+                      <span className="badge text-xs">+{group.participants.length - 3}</span>
+                    )}
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         )}

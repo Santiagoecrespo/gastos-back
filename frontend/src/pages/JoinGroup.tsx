@@ -33,7 +33,7 @@ export default function JoinGroup() {
           const hostP = info.participants.find((p) => p.id === info.host_participant_id);
           if (hostP) {
             try {
-              const result = await joinGroup(inviteToken, hostP.name);
+              const result = await joinGroup(inviteToken, hostP.name, accessToken);
               localStorage.setItem(`group_token_${result.group_id}`, result.token);
               localStorage.setItem(
                 `group_participant_${result.group_id}`,

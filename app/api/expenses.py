@@ -419,6 +419,26 @@ async def get_balances(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# ENDPOINT 5 — Eliminar grupo (JWT de usuario — solo el creador)
+# ══════════════════════════════════════════════════════════════════════════
+@router.delete(
+    "/groups/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a group and all its data (user JWT, creator only)",
+)
+async def delete_group(
+    group_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group = _get_group_or_404(group_id, db)
+    if group.created_by != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permiso para eliminar este grupo")
+    db.delete(group)
+    db.commit()
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # ENDPOINT 4 — Saldar grupo (guest JWT)
 # ══════════════════════════════════════════════════════════════════════════
 @router.patch(

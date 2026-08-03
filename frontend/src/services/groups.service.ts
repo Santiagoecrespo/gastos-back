@@ -71,11 +71,12 @@ export async function getInvitePage(inviteToken: string): Promise<InvitePageResp
 
 export async function joinGroup(
   inviteToken: string,
-  participantName: string
+  participantName: string,
+  userJwt?: string
 ): Promise<JoinResponse> {
   const { data } = await client.post<JoinResponse>(
     `/api/groups/invite/${inviteToken}/join`,
-    { participant_name: participantName }
+    { participant_name: participantName, user_jwt: userJwt ?? null }
   );
   return data;
 }
@@ -96,4 +97,8 @@ export async function setMyContribution(
     { amount }
   );
   return data;
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  await client.delete(`/api/groups/${groupId}`);
 }

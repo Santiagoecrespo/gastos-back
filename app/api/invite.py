@@ -13,9 +13,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_access_token
 from app.models.group import Group
 from app.models.participant import Participant
+from app.models.user import User
 from app.schemas.group import InvitePageResponse, JoinResponse, ParticipantOut
 
 router = APIRouter(prefix="/api", tags=["invite"])
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/api", tags=["invite"])
 class JoinRequest(BaseModel):
     participant_name: str
     mp_alias: Optional[str] = None
+    user_jwt: Optional[str] = None  # required when joining as the host participant
 
 
 @router.get(
@@ -105,6 +107,21 @@ def join_group(
         participant.mp_alias = body.mp_alias
         db.commit()
         db.refresh(participant)
+
+    # Block host participant unless a valid user JWT from the creator is provided
+    if participant.id == group.host_participant_id:
+        authed = False
+        if body.user_jwt:
+            payload = decode_access_token(body.user_jwt)
+            if payload and payload.get("type") != "guest":
+                user = db.query(User).filter(User.id == payload.get("sub")).first()
+                if user and group.created_by == user.id:
+                    authed = True
+        if not authed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el anfitrion puede usar este perfil",
+            )
 
     token = create_access_token(data={
         "sub": participant.id,
