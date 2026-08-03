@@ -20,12 +20,14 @@ export interface ParticipantOut {
   id: string;
   name: string;
   mp_alias?: string | null;
+  pending_contribution: number;
 }
 
 export interface GroupResponse {
   group_id: string;
   name: string;
   invite_token: string;
+  host_participant_id?: string | null;
   participants: ParticipantOut[];
 }
 
@@ -33,6 +35,8 @@ export interface InvitePageResponse {
   group_id: string;
   group_name: string;
   invite_token: string;
+  host_participant_id?: string | null;
+  host_mp_alias?: string | null;
   participants: ParticipantOut[];
 }
 
@@ -78,6 +82,14 @@ export interface BalanceResponse {
 export interface SettleResponse {
   message: string;
   expenses_settled: number;
+}
+
+export interface ExpenseListItem {
+  expense_id: string;
+  description: string;
+  amount: number;
+  date: string;
+  payer_name: string;
 }
 
 export interface PaymentButtonProps {

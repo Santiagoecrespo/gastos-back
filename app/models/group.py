@@ -4,6 +4,8 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
+from typing import Optional
+
 from sqlalchemy import String, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +38,8 @@ class Group(Base):
         default=lambda: secrets.token_urlsafe(16),
         index=True,
     )
+    # ID of the creator's Participant row (no FK to avoid circular dependency)
+    host_participant_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Relationships
     creator: Mapped["User"] = relationship("User", back_populates="created_groups")

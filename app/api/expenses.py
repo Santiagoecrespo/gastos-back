@@ -24,6 +24,7 @@ from app.schemas.expense import (
     ExpenseCreate,
     ContributionIn,
     ExpenseResponse,
+    ExpenseListItem,
     ShareOut,
     BalanceResponse,
     BalanceTransaction,
@@ -99,7 +100,11 @@ async def get_group(
         group_id=group.id,
         name=group.name,
         invite_token=group.invite_token,
-        participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
+        host_participant_id=group.host_participant_id,
+        participants=[
+            ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias, pending_contribution=p.pending_contribution)
+            for p in participants
+        ],
     )
 
 
@@ -141,6 +146,9 @@ async def create_group(
         )
         db.add(creator_p)
         participants.append(creator_p)
+    else:
+        # Creator is in the explicit list — find or create
+        creator_p = None
 
     for raw_name in payload.participant_names:
         name = raw_name.strip()
@@ -148,7 +156,11 @@ async def create_group(
             p = Participant(name=name, group_id=group.id)
             db.add(p)
             participants.append(p)
+            if creator_p is None and name.lower() == creator_name.lower():
+                creator_p = p
 
+    db.flush()  # get IDs before setting host_participant_id
+    group.host_participant_id = creator_p.id if creator_p else (participants[0].id if participants else None)
     db.commit()
     db.refresh(group)
     for p in participants:
@@ -158,12 +170,78 @@ async def create_group(
         group_id=group.id,
         name=group.name,
         invite_token=group.invite_token,
-        participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
+        host_participant_id=group.host_participant_id,
+        participants=[
+            ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias, pending_contribution=p.pending_contribution)
+            for p in participants
+        ],
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 2 — Registrar gasto (JWT de participante/guest)
+# ENDPOINT 1b — Listar gastos del grupo (guest JWT)
+# ══════════════════════════════════════════════════════════════════════════
+@router.get(
+    "/groups/{group_id}/expenses",
+    response_model=list[ExpenseListItem],
+    summary="List unsettled expenses for a group (guest JWT)",
+)
+async def list_expenses(
+    group_id: str,
+    db: Session = Depends(get_db),
+    participant: Participant = Depends(get_current_participant),
+):
+    _assert_in_group(participant, group_id)
+    expenses = (
+        db.query(Expense)
+        .filter(Expense.group_id == group_id, Expense.is_settled == False)  # noqa: E712
+        .order_by(Expense.date.desc())
+        .all()
+    )
+    payer_map: dict[str, str] = {}
+    for exp in expenses:
+        if exp.payer_id not in payer_map:
+            p = db.query(Participant).filter(Participant.id == exp.payer_id).first()
+            payer_map[exp.payer_id] = p.name if p else "Desconocido"
+    return [
+        ExpenseListItem(
+            expense_id=exp.id,
+            description=exp.description,
+            amount=exp.amount,
+            date=exp.date,
+            payer_name=payer_map.get(exp.payer_id, "Desconocido"),
+        )
+        for exp in expenses
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ENDPOINT 1c — Guardar aporte previo (guest JWT, solo propio)
+# ══════════════════════════════════════════════════════════════════════════
+from pydantic import BaseModel as _BaseModel
+
+class _ContributionPayload(_BaseModel):
+    amount: float = 0.0
+
+
+@router.post(
+    "/groups/{group_id}/my-contribution",
+    summary="Set pending contribution for current participant (guest JWT)",
+)
+async def set_my_contribution(
+    group_id: str,
+    payload: _ContributionPayload,
+    db: Session = Depends(get_db),
+    participant: Participant = Depends(get_current_participant),
+):
+    _assert_in_group(participant, group_id)
+    participant.pending_contribution = max(0.0, payload.amount)
+    db.commit()
+    return {"participant_id": participant.id, "pending_contribution": participant.pending_contribution}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ENDPOINT 2 — Registrar gasto (JWT de participante/guest — solo anfitrión)
 # ══════════════════════════════════════════════════════════════════════════
 @router.post(
     "/groups/{group_id}/expenses",
@@ -178,7 +256,14 @@ async def create_expense(
     participant: Participant = Depends(get_current_participant),
 ):
     _assert_in_group(participant, group_id)
-    _get_group_or_404(group_id, db)
+    group = _get_group_or_404(group_id, db)
+
+    # Only the host can register expenses
+    if group.host_participant_id and participant.id != group.host_participant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el anfitrión puede registrar gastos",
+        )
 
     payer = db.query(Participant).filter(
         Participant.id == payload.payer_id,
@@ -192,8 +277,12 @@ async def create_expense(
 
     all_participants = _get_participants(group_id, db)
 
-    # Build contribution lookup {participant_id: amount}
+    # Build contribution map: explicit payload first, then pending_contribution fallback
     contrib_map: dict[str, float] = {c.participant_id: c.amount for c in payload.contributions}
+    for p in all_participants:
+        if p.id not in contrib_map and p.pending_contribution > 0:
+            contrib_map[p.id] = p.pending_contribution
+
     contrib_total = sum(contrib_map.values())
     if contrib_total > payload.amount:
         raise HTTPException(
@@ -232,6 +321,11 @@ async def create_expense(
     db.commit()
     db.refresh(expense)
 
+    # Reset pending contributions after expense is created
+    for p in all_participants:
+        p.pending_contribution = 0.0
+    db.commit()
+
     return ExpenseResponse(
         expense_id=expense.id,
         amount=expense.amount,
@@ -258,7 +352,8 @@ async def get_balances(
 
     all_participants = _get_participants(group_id, db)
     participant_map: dict[str, ParticipantOut] = {
-        p.id: ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in all_participants
+        p.id: ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias, pending_contribution=p.pending_contribution)
+        for p in all_participants
     }
     net: dict[str, float] = {p.id: 0.0 for p in all_participants}
 

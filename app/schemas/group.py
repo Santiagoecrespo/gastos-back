@@ -12,6 +12,7 @@ class ParticipantOut(BaseModel):
     id: str
     name: str
     mp_alias: Optional[str] = None
+    pending_contribution: float = 0.0
 
 
 # ── Request schemas ──────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ class GroupResponse(BaseModel):
     group_id: str
     name: str
     invite_token: str
+    host_participant_id: Optional[str] = None
     participants: list[ParticipantOut]
 
 
@@ -40,6 +42,8 @@ class InvitePageResponse(BaseModel):
     group_id: str
     group_name: str
     invite_token: str
+    host_participant_id: Optional[str] = None
+    host_mp_alias: Optional[str] = None
     participants: list[ParticipantOut]
 
 

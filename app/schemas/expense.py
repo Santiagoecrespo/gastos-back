@@ -56,3 +56,11 @@ class BalanceResponse(BaseModel):
 class SettleResponse(BaseModel):
     message: str
     expenses_settled: int
+
+
+class ExpenseListItem(BaseModel):
+    expense_id: str
+    description: str
+    amount: float
+    date: date
+    payer_name: str

@@ -3,6 +3,7 @@ import client from "../api/client";
 import type {
   GroupResponse,
   ExpenseResponse,
+  ExpenseListItem,
   BalanceResponse,
   SettleResponse,
   InvitePageResponse,
@@ -75,6 +76,24 @@ export async function joinGroup(
   const { data } = await client.post<JoinResponse>(
     `/api/groups/invite/${inviteToken}/join`,
     { participant_name: participantName }
+  );
+  return data;
+}
+
+export async function getExpenses(groupId: string): Promise<ExpenseListItem[]> {
+  const { data } = await client.get<ExpenseListItem[]>(
+    `/api/groups/${groupId}/expenses`
+  );
+  return data;
+}
+
+export async function setMyContribution(
+  groupId: string,
+  amount: number
+): Promise<{ participant_id: string; pending_contribution: number }> {
+  const { data } = await client.post(
+    `/api/groups/${groupId}/my-contribution`,
+    { amount }
   );
   return data;
 }

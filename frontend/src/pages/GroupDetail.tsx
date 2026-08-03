@@ -1,4 +1,5 @@
-import { useState, useEffect, type FormEvent } from "react";
+﻿// src/pages/GroupDetail.tsx
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import BalanceCard from "../components/BalanceCard";
@@ -6,9 +7,11 @@ import {
   getGroupById,
   addExpense,
   getBalances,
+  getExpenses,
+  setMyContribution,
   settleGroup,
 } from "../services/groups.service";
-import type { GroupResponse, BalanceResponse } from "../types";
+import type { GroupResponse, BalanceResponse, ExpenseListItem } from "../types";
 
 type Tab = "expense" | "balances";
 
@@ -16,34 +19,45 @@ export default function GroupDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  // Guest participant stored in localStorage after joining
   const storedParticipant = id
     ? JSON.parse(localStorage.getItem(`group_participant_${id}`) || "null")
     : null;
   const currentParticipantId: string = storedParticipant?.id || "";
 
-  // Current participant always first, rest alphabetical
-  const sortedParticipants = (group?.participants ?? []).slice().sort((a, b) => {
-    if (a.id === currentParticipantId) return -1;
-    if (b.id === currentParticipantId) return 1;
-    return a.name.localeCompare(b.name);
-  });
-
   const [group, setGroup] = useState<GroupResponse | null>(null);
+  const [expenses, setExpenses] = useState<ExpenseListItem[]>([]);
   const [balanceData, setBalanceData] = useState<BalanceResponse | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("expense");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Expense form
+  const isHost = group?.host_participant_id
+    ? currentParticipantId === group.host_participant_id
+    : !!localStorage.getItem("access_token");
+
+  const sortedParticipants = useMemo(() => {
+    if (!group) return [];
+    return [...group.participants].sort((a, b) => {
+      if (a.id === group.host_participant_id) return -1;
+      if (b.id === group.host_participant_id) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [group]);
+
+  // Host expense form
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [payerId, setPayerId] = useState("");
-  const [contributions, setContributions] = useState<Record<string, string>>({});
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [expenseError, setExpenseError] = useState("");
   const [expenseSuccess, setExpenseSuccess] = useState("");
+
+  // Guest contribution form
+  const [myContribInput, setMyContribInput] = useState("");
+  const [contribLoading, setContribLoading] = useState(false);
+  const [contribSuccess, setContribSuccess] = useState("");
+  const [contribError, setContribError] = useState("");
 
   // Balances
   const [balancesLoading, setBalancesLoading] = useState(false);
@@ -55,18 +69,24 @@ export default function GroupDetail() {
   }, [id]);
 
   useEffect(() => {
-    if (activeTab === "balances" && id) {
-      fetchBalances();
-    }
+    if (activeTab === "balances" && id) fetchBalances();
   }, [activeTab, id]);
 
   const fetchGroup = async () => {
     try {
-      const data = await getGroupById(id!);
-      setGroup(data);
-      if (data.participants.length > 0 && !payerId) {
-        const me = data.participants.find((p) => p.id === currentParticipantId);
-        setPayerId(me?.id || data.participants[0].id);
+      const [groupData, expData] = await Promise.all([
+        getGroupById(id!),
+        getExpenses(id!).catch(() => [] as ExpenseListItem[]),
+      ]);
+      setGroup(groupData);
+      setExpenses(expData);
+      if (groupData.participants.length > 0) {
+        const hostId = groupData.host_participant_id;
+        setPayerId(hostId || groupData.participants[0].id);
+        const myP = groupData.participants.find((p) => p.id === currentParticipantId);
+        if (myP && myP.pending_contribution > 0) {
+          setMyContribInput(String(myP.pending_contribution));
+        }
       }
     } catch {
       setError("No se pudo cargar el grupo");
@@ -78,8 +98,7 @@ export default function GroupDetail() {
   const fetchBalances = async () => {
     setBalancesLoading(true);
     try {
-      const data = await getBalances(id!);
-      setBalanceData(data);
+      setBalanceData(await getBalances(id!));
     } catch {
       setError("No se pudieron cargar los saldos");
     } finally {
@@ -91,42 +110,58 @@ export default function GroupDetail() {
     e.preventDefault();
     setExpenseError("");
     setExpenseSuccess("");
-
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setExpenseError("El monto debe ser mayor a 0");
       return;
     }
-
     setExpenseLoading(true);
     try {
-      const contributionsArr = Object.entries(contributions)
-        .map(([participant_id, val]) => ({ participant_id, amount: parseFloat(val) || 0 }))
-        .filter((c) => c.amount > 0);
-
       const result = await addExpense(id!, {
         amount: numAmount,
         description,
         date,
         payer_id: payerId,
-        contributions: contributionsArr,
+        contributions: [],
       });
       setExpenseSuccess(
-        `Gasto registrado: $${result.amount.toLocaleString("es-AR")} dividido en $${result.split_per_person.toLocaleString("es-AR")} por persona`
+        `Gasto registrado: $${result.amount.toLocaleString("es-AR")} — $${result.split_per_person.toLocaleString("es-AR")} por persona`
       );
       setDescription("");
       setAmount("");
       setDate(new Date().toISOString().split("T")[0]);
-      setContributions({});
+      const [refreshed, refreshedExp] = await Promise.all([
+        getGroupById(id!),
+        getExpenses(id!).catch(() => [] as ExpenseListItem[]),
+      ]);
+      setGroup(refreshed);
+      setExpenses(refreshedExp);
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "response" in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } };
-        setExpenseError(axiosErr.response?.data?.detail || "Error al registrar gasto");
-      } else {
-        setExpenseError("Error de conexión");
-      }
+      const axErr = err as { response?: { data?: { detail?: string } } };
+      setExpenseError(axErr.response?.data?.detail || "Error al registrar gasto");
     } finally {
       setExpenseLoading(false);
+    }
+  };
+
+  const handleContribution = async (e: FormEvent) => {
+    e.preventDefault();
+    setContribError("");
+    setContribSuccess("");
+    const amt = parseFloat(myContribInput) || 0;
+    setContribLoading(true);
+    try {
+      await setMyContribution(id!, amt);
+      setContribSuccess(
+        amt > 0
+          ? `Aporte de $${amt.toLocaleString("es-AR")} guardado. El anfitrion lo vera al registrar el gasto.`
+          : "Aporte eliminado."
+      );
+      setGroup(await getGroupById(id!));
+    } catch {
+      setContribError("Error al guardar el aporte");
+    } finally {
+      setContribLoading(false);
     }
   };
 
@@ -135,9 +170,7 @@ export default function GroupDetail() {
     try {
       const result = await settleGroup(id!);
       await fetchBalances();
-      setExpenseSuccess(
-        `${result.message} (${result.expenses_settled} gastos saldados)`
-      );
+      setExpenseSuccess(`${result.message} (${result.expenses_settled} gastos saldados)`);
     } catch {
       setError("Error al saldar el grupo");
     } finally {
@@ -167,7 +200,7 @@ export default function GroupDetail() {
           <div className="card text-center py-12">
             <p className="text-accent-red mb-4">{error}</p>
             <button onClick={() => navigate("/")} className="btn-ghost">
-              ← Volver al dashboard
+              Volver al dashboard
             </button>
           </div>
         </div>
@@ -175,21 +208,27 @@ export default function GroupDetail() {
     );
   }
 
+  const hostParticipant = group?.participants.find((p) => p.id === group.host_participant_id);
+  const lastExpense = expenses[0] ?? null;
+
   return (
     <div className="min-h-screen">
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 py-8">
+
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate("/")} className="btn-ghost px-2 py-1">
-            ←
           </button>
           <div>
             <h1 className="text-2xl font-bold">{group?.name}</h1>
             <p className="text-gray-500 text-sm">
               {group?.participants.length} integrantes
               {storedParticipant && (
-                <span className="ml-2 text-accent-green">• {storedParticipant.name}</span>
+                <span className="ml-2 text-accent-green">
+                  {storedParticipant.name}
+                  {isHost && <span className="ml-1">Anfitrion</span>}
+                </span>
               )}
             </p>
           </div>
@@ -200,32 +239,26 @@ export default function GroupDetail() {
           <button
             onClick={() => setActiveTab("expense")}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-              activeTab === "expense"
-                ? "bg-dark-200 text-gray-100 shadow-sm"
-                : "text-gray-500 hover:text-gray-300"
+              activeTab === "expense" ? "bg-dark-200 text-gray-100 shadow-sm" : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            Nuevo gasto
+            {isHost ? "Nuevo gasto" : "Mi aporte"}
           </button>
           <button
             onClick={() => setActiveTab("balances")}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-              activeTab === "balances"
-                ? "bg-dark-200 text-gray-100 shadow-sm"
-                : "text-gray-500 hover:text-gray-300"
+              activeTab === "balances" ? "bg-dark-200 text-gray-100 shadow-sm" : "text-gray-500 hover:text-gray-300"
             }`}
           >
             Saldos
           </button>
         </div>
 
-        {/* ── Tab: Nuevo gasto ──────────────────────────────────── */}
-        {activeTab === "expense" && (
+        {/* Tab: Expense / Aporte */}
+        {activeTab === "expense" && isHost && (
           <form onSubmit={handleExpense} className="card space-y-4">
             <div>
-              <label className="text-sm text-gray-400 block mb-1">
-                Descripción
-              </label>
+              <label className="text-sm text-gray-400 block mb-1">Descripcion</label>
               <input
                 type="text"
                 required
@@ -238,9 +271,7 @@ export default function GroupDetail() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  Monto ($)
-                </label>
+                <label className="text-sm text-gray-400 block mb-1">Monto ($)</label>
                 <input
                   type="number"
                   required
@@ -253,9 +284,7 @@ export default function GroupDetail() {
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  Fecha
-                </label>
+                <label className="text-sm text-gray-400 block mb-1">Fecha</label>
                 <input
                   type="date"
                   required
@@ -269,25 +298,24 @@ export default function GroupDetail() {
             {/* Preview en tiempo real */}
             {parseFloat(amount) > 0 && sortedParticipants.length > 0 && (
               <div className="bg-dark-50 border border-dark-300 rounded-lg p-3 space-y-1">
-                <p className="text-sm text-gray-400 mb-2">💰 División estimada:</p>
+                <p className="text-sm text-gray-400 mb-2">Division estimada:</p>
                 {sortedParticipants.map((p) => {
                   const total = parseFloat(amount) || 0;
                   const splitBase = total / sortedParticipants.length;
-                  const contrib = parseFloat(contributions[p.id] || "0") || 0;
-                  const pending = splitBase - contrib;
-                  const isMe = p.id === currentParticipantId;
+                  const pending = splitBase - p.pending_contribution;
+                  const isThisHost = p.id === group?.host_participant_id;
                   return (
                     <div key={p.id} className="flex justify-between text-sm">
-                      <span className={isMe ? "text-accent-green" : "text-gray-300"}>
-                        {p.name}{isMe ? " (Tú)" : ""}
+                      <span className={isThisHost ? "text-yellow-400" : "text-gray-300"}>
+                        {p.name}{isThisHost ? " (Anfitrion)" : ""}
                       </span>
                       {pending <= 0 ? (
-                        <span className="text-accent-green">✅ Ya está cubierto</span>
+                        <span className="text-accent-green">Ya cubierto</span>
                       ) : (
                         <span>
                           <span className="text-gray-100">${Math.round(pending).toLocaleString("es-AR")}</span>
-                          {contrib > 0 && (
-                            <span className="text-gray-600 text-xs"> (aportó ${Math.round(contrib).toLocaleString("es-AR")})</span>
+                          {p.pending_contribution > 0 && (
+                            <span className="text-gray-500 text-xs"> (aporto ${Math.round(p.pending_contribution).toLocaleString("es-AR")})</span>
                           )}
                         </span>
                       )}
@@ -298,56 +326,47 @@ export default function GroupDetail() {
             )}
 
             <div>
-              <label className="text-sm text-gray-400 block mb-1">
-                ¿Quién pagó?
-              </label>
+              <label className="text-sm text-gray-400 block mb-1">Quien pago?</label>
               <select
                 value={payerId}
                 onChange={(e) => setPayerId(e.target.value)}
                 className="input"
               >
-              {sortedParticipants.map((p) => (
+                {sortedParticipants.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}{p.id === currentParticipantId ? " (Tú)" : ""}
+                    {p.name}{p.id === group?.host_participant_id ? " (Anfitrion)" : ""}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Contribuciones previas */}
+            {/* Aportes previos - solo lectura */}
             <div>
               <label className="text-sm text-gray-400 block mb-1">
-                ¿Alguien ya aportó algo? <span className="text-gray-600">(opcional)</span>
+                Aportes previos <span className="text-gray-600">(ingresados por cada uno)</span>
               </label>
               <p className="text-xs text-gray-600 mb-2">
-                Si alguien trajo algo antes de dividir, ingresá el monto acá
+                Se descuentan automaticamente de la deuda de cada integrante.
               </p>
               <div className="space-y-2">
-                {sortedParticipants.map((p) => {
-                  const isMe = p.id === currentParticipantId;
-                  return (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <span className={`text-sm flex-1 ${isMe ? "text-accent-green" : "text-gray-400"}`}>
-                        {p.name}{isMe ? " (Tú)" : ""}
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={contributions[p.id] ?? ""}
-                        onChange={(e) =>
-                          setContributions((prev) => ({ ...prev, [p.id]: e.target.value }))
-                        }
-                        placeholder="ej: 2000"
-                        className={`input w-32 text-sm ${
-                          !isMe ? "opacity-40 cursor-not-allowed" : ""
-                        }`}
-                        disabled={!isMe}
-                        title={!isMe ? `Solo ${p.name} puede editar su aporte` : undefined}
-                      />
-                    </div>
-                  );
-                })}
+                {sortedParticipants.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <span className="text-sm flex-1 text-gray-400">
+                      {p.name}
+                      {p.id === group?.host_participant_id && <span className="ml-1 text-yellow-400 text-xs"> (Anfitrion)</span>}
+                    </span>
+                    <input
+                      type="number"
+                      value={p.pending_contribution > 0 ? p.pending_contribution : ""}
+                      readOnly
+                      placeholder="Sin aporte"
+                      className="input w-32 text-sm opacity-50 cursor-not-allowed"
+                    />
+                    <span className="text-xs text-gray-600 whitespace-nowrap w-20">
+                      {p.pending_contribution > 0 ? "ingresado" : "sin aporte"}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -356,24 +375,86 @@ export default function GroupDetail() {
                 <p className="text-accent-red text-sm">{expenseError}</p>
               </div>
             )}
-
             {expenseSuccess && (
               <div className="bg-accent-green/10 border border-accent-green/30 rounded-lg px-3 py-2">
                 <p className="text-accent-green text-sm">{expenseSuccess}</p>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={expenseLoading}
-              className="btn-primary w-full"
-            >
+            <button type="submit" disabled={expenseLoading} className="btn-primary w-full">
               {expenseLoading ? "Registrando..." : "Registrar gasto"}
             </button>
           </form>
         )}
 
-        {/* ── Tab: Saldos ───────────────────────────────────────── */}
+        {activeTab === "expense" && !isHost && (
+          <div className="space-y-4">
+            <div className="card border border-yellow-500/20 bg-yellow-500/5">
+              <p className="text-sm text-yellow-300 font-medium mb-1">
+                Solo el anfitrion puede registrar gastos
+              </p>
+              {hostParticipant && (
+                <p className="text-xs text-gray-400">
+                  Anfitrion: <span className="text-gray-200">{hostParticipant.name}</span>
+                </p>
+              )}
+            </div>
+
+            {lastExpense ? (
+              <div className="card space-y-2">
+                <p className="text-xs text-gray-500">Ultimo gasto registrado:</p>
+                <p className="text-gray-100 font-medium">
+                  {lastExpense.description}
+                  <span className="text-accent-green ml-2">${lastExpense.amount.toLocaleString("es-AR")}</span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Pago: {lastExpense.payer_name} &middot; {lastExpense.date}
+                </p>
+                {sortedParticipants.length > 0 && (
+                  <p className="text-sm text-gray-300 pt-1">
+                    Tu parte estimada:{" "}
+                    <span className="text-accent-green font-medium">
+                      ${Math.round(lastExpense.amount / sortedParticipants.length).toLocaleString("es-AR")}
+                    </span>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="card text-center py-6">
+                <p className="text-gray-500 text-sm">El anfitrion todavia no registro ningun gasto.</p>
+              </div>
+            )}
+
+            <form onSubmit={handleContribution} className="card space-y-3">
+              <label className="text-sm text-gray-300 block font-medium">
+                Aportaste algo antes?
+              </label>
+              <p className="text-xs text-gray-500">
+                Si trajiste algo o pagaste por adelantado, ingresa el monto. Se descuenta de tu deuda.
+              </p>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={myContribInput}
+                onChange={(e) => setMyContribInput(e.target.value)}
+                placeholder="ej: 2000"
+                className="input"
+              />
+              {contribError && <p className="text-accent-red text-sm">{contribError}</p>}
+              {contribSuccess && (
+                <div className="bg-accent-green/10 border border-accent-green/30 rounded-lg px-3 py-2">
+                  <p className="text-accent-green text-sm">{contribSuccess}</p>
+                </div>
+              )}
+              <button type="submit" disabled={contribLoading} className="btn-primary w-full">
+                {contribLoading ? "Guardando..." : "Guardar mi aporte"}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Tab: Saldos */}
         {activeTab === "balances" && (
           <div className="space-y-4">
             {balancesLoading && (
@@ -387,23 +468,56 @@ export default function GroupDetail() {
 
             {!balancesLoading && balanceData?.all_settled && (
               <div className="card text-center py-10">
-                <div className="text-4xl mb-3">✅</div>
-                <h3 className="text-lg font-semibold text-accent-green mb-1">
-                  Grupo al día
-                </h3>
-                <p className="text-gray-500 text-sm">
-                  No hay deudas pendientes
-                </p>
+                <div className="text-4xl mb-3">check</div>
+                <h3 className="text-lg font-semibold text-accent-green mb-1">Grupo al dia</h3>
+                <p className="text-gray-500 text-sm">No hay deudas pendientes</p>
               </div>
             )}
 
-            {!balancesLoading &&
-              balanceData &&
-              !balanceData.all_settled &&
-              balanceData.balances.length > 0 && (
+            {!balancesLoading && balanceData && !balanceData.all_settled && (() => {
+              const visibleBalances = isHost
+                ? balanceData.balances
+                : balanceData.balances.filter((tx) => tx.from_participant.id === currentParticipantId);
+
+              if (balanceData.balances.length === 0) {
+                return (
+                  <div className="card text-center py-10">
+                    <p className="text-gray-500 text-sm">Todavia no hay gastos registrados</p>
+                  </div>
+                );
+              }
+
+              if (visibleBalances.length === 0) {
+                return (
+                  <div className="card text-center py-10">
+                    <p className="text-accent-green text-sm">No tenes deuda pendiente</p>
+                  </div>
+                );
+              }
+
+              return (
                 <>
+                  {!isHost && hostParticipant && (
+                    hostParticipant.mp_alias ? (
+                      <div className="card border border-accent-green/30 bg-accent-green/5 space-y-1">
+                        <p className="text-sm text-gray-300 font-medium">
+                          Transferile a {hostParticipant.name}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Alias: <span className="text-gray-100 font-medium">{hostParticipant.mp_alias}</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-4 py-3">
+                        <p className="text-sm text-yellow-400">
+                          El anfitrion no cargo su alias de pago. Pidele para poder transferirle.
+                        </p>
+                      </div>
+                    )
+                  )}
+
                   <div className="space-y-3">
-                    {balanceData.balances.map((tx, i) => (
+                    {visibleBalances.map((tx, i) => (
                       <BalanceCard
                         key={i}
                         transaction={tx}
@@ -412,31 +526,22 @@ export default function GroupDetail() {
                     ))}
                   </div>
 
-                  <div className="pt-2">
-                    <button
-                      onClick={handleSettle}
-                      disabled={settleLoading}
-                      className="btn-danger w-full"
-                    >
-                      {settleLoading
-                        ? "Saldando..."
-                        : `Saldar todo (${balanceData.total_transactions} transferencias)`}
-                    </button>
-                  </div>
+                  {isHost && (
+                    <div className="pt-2">
+                      <button
+                        onClick={handleSettle}
+                        disabled={settleLoading}
+                        className="btn-danger w-full"
+                      >
+                        {settleLoading
+                          ? "Saldando..."
+                          : `Saldar todo (${balanceData.total_transactions} transferencias)`}
+                      </button>
+                    </div>
+                  )}
                 </>
-              )}
-
-            {!balancesLoading &&
-              balanceData &&
-              !balanceData.all_settled &&
-              balanceData.balances.length === 0 && (
-                <div className="card text-center py-10">
-                  <div className="text-4xl mb-3">📊</div>
-                  <p className="text-gray-500 text-sm">
-                    Todavía no hay gastos registrados
-                  </p>
-                </div>
-              )}
+              );
+            })()}
           </div>
         )}
       </main>

@@ -10,7 +10,7 @@ import uuid
 
 from typing import Optional
 
-from sqlalchemy import String, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Float, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -31,6 +31,7 @@ class Participant(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     mp_alias: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pending_contribution: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     group_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("groups.id", ondelete="CASCADE"),

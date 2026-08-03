@@ -44,11 +44,22 @@ def get_invite_page(invite_token: str, db: Session = Depends(get_db)):
     participants = (
         db.query(Participant).filter(Participant.group_id == group.id).all()
     )
+
+    host_p = (
+        db.query(Participant).filter(Participant.id == group.host_participant_id).first()
+        if group.host_participant_id else None
+    )
+
     return InvitePageResponse(
         group_id=group.id,
         group_name=group.name,
         invite_token=group.invite_token,
-        participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
+        host_participant_id=group.host_participant_id,
+        host_mp_alias=host_p.mp_alias if host_p else None,
+        participants=[
+            ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias, pending_contribution=p.pending_contribution)
+            for p in participants
+        ],
     )
 
 

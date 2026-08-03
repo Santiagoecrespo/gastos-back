@@ -75,6 +75,20 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("ALTER TABLE expense_shares ADD COLUMN contribution FLOAT NOT NULL DEFAULT 0"))
                 conn.commit()
 
+        # Add pending_contribution to participants if missing
+        if "participants" in tables:
+            pc_cols = [c["name"] for c in inspector.get_columns("participants")]
+            if "pending_contribution" not in pc_cols:
+                conn.execute(text("ALTER TABLE participants ADD COLUMN pending_contribution FLOAT NOT NULL DEFAULT 0"))
+                conn.commit()
+
+        # Add host_participant_id to groups if missing
+        if "groups" in tables:
+            g2_cols = [c["name"] for c in inspector.get_columns("groups")]
+            if "host_participant_id" not in g2_cols:
+                conn.execute(text("ALTER TABLE groups ADD COLUMN host_participant_id VARCHAR(36)"))
+                conn.commit()
+
     # Create all tables (new ones + recreated ones)
     Base.metadata.create_all(bind=engine)
     yield
