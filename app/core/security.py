@@ -2,17 +2,19 @@
 Security utilities: password hashing (bcrypt) and JWT token management.
 """
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from jose import JWTError, jwt
 
 # ---------------------------------------------------------------------------
-# Configuration – replace SECRET_KEY via env var before going to production
+# Configuration
 # ---------------------------------------------------------------------------
-SECRET_KEY = "dev-secret-key-change-me-in-production"
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+USER_TOKEN_EXPIRE_DAYS = 7
+GUEST_TOKEN_EXPIRE_DAYS = 30
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +49,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     """
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (
-        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta or timedelta(days=USER_TOKEN_EXPIRE_DAYS)
     )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

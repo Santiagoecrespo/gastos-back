@@ -335,6 +335,31 @@ async def create_expense(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# ENDPOINT 2b — Eliminar gasto individual (guest JWT — solo anfitrión)
+# ══════════════════════════════════════════════════════════════════════════
+@router.delete(
+    "/groups/{group_id}/expenses/{expense_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a single expense (guest JWT, host only)",
+)
+async def delete_expense(
+    group_id: str,
+    expense_id: str,
+    db: Session = Depends(get_db),
+    participant: Participant = Depends(get_current_participant),
+):
+    _assert_in_group(participant, group_id)
+    group = _get_group_or_404(group_id, db)
+    if group.host_participant_id and participant.id != group.host_participant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el anfitrión puede eliminar gastos")
+    expense = db.query(Expense).filter(Expense.id == expense_id, Expense.group_id == group_id).first()
+    if not expense:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gasto no encontrado")
+    db.delete(expense)
+    db.commit()
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # ENDPOINT 3 — Balance del grupo ajustado por inflacion (guest JWT)
 # ══════════════════════════════════════════════════════════════════════════
 @router.get(

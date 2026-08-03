@@ -102,3 +102,7 @@ export async function setMyContribution(
 export async function deleteGroup(groupId: string): Promise<void> {
   await client.delete(`/api/groups/${groupId}`);
 }
+
+export async function deleteExpense(groupId: string, expenseId: string): Promise<void> {
+  await client.delete(`/api/groups/${groupId}/expenses/${expenseId}`);
+}

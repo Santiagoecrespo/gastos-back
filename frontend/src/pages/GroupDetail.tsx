@@ -10,10 +10,11 @@ import {
   getExpenses,
   setMyContribution,
   settleGroup,
+  deleteExpense,
 } from "../services/groups.service";
 import type { GroupResponse, BalanceResponse, ExpenseListItem } from "../types";
 
-type Tab = "expense" | "balances";
+type Tab = "expense" | "balances" | "history";
 
 export default function GroupDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +64,12 @@ export default function GroupDetail() {
   // Balances
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [settleLoading, setSettleLoading] = useState(false);
+
+  // Share link
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // Delete expense confirmation
+  const [confirmDeleteExpense, setConfirmDeleteExpense] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -188,6 +195,25 @@ export default function GroupDetail() {
     }
   };
 
+  const handleDeleteExpense = async (expenseId: string) => {
+    try {
+      await deleteExpense(id!, expenseId);
+      setExpenses((prev) => prev.filter((e) => e.expense_id !== expenseId));
+    } catch {
+      setExpenseError("No se pudo eliminar el gasto");
+    } finally {
+      setConfirmDeleteExpense(null);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!group) return;
+    const link = `${window.location.origin}/g/${group.invite_token}`;
+    await navigator.clipboard.writeText(link);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2500);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -230,8 +256,8 @@ export default function GroupDetail() {
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate("/")} className="btn-ghost px-2 py-1">
           </button>
-          <div>
-            <h1 className="text-2xl font-bold">{group?.name}</h1>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold truncate">{group?.name}</h1>
             <p className="text-gray-500 text-sm">
               {group?.participants.length} integrantes
               {storedParticipant && (
@@ -242,21 +268,39 @@ export default function GroupDetail() {
               )}
             </p>
           </div>
+          <button
+            onClick={handleShare}
+            className="btn-ghost text-sm px-3 py-2 whitespace-nowrap"
+            title="Copiar link de invitacion"
+          >
+            {shareCopied ? "Copiado!" : "Compartir"}
+          </button>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-dark-50 p-1 rounded-lg mb-6 border border-dark-300">
           <button
             onClick={() => setActiveTab("expense")}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
               activeTab === "expense" ? "bg-dark-200 text-gray-100 shadow-sm" : "text-gray-500 hover:text-gray-300"
             }`}
           >
             {isHost ? "Nuevo gasto" : "Mi aporte"}
           </button>
           <button
+            onClick={() => setActiveTab("history")}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+              activeTab === "history" ? "bg-dark-200 text-gray-100 shadow-sm" : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            Gastos
+            {expenses.length > 0 && (
+              <span className="ml-1 text-xs text-gray-500">({expenses.length})</span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab("balances")}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
               activeTab === "balances" ? "bg-dark-200 text-gray-100 shadow-sm" : "text-gray-500 hover:text-gray-300"
             }`}
           >
@@ -462,6 +506,71 @@ export default function GroupDetail() {
                 {contribLoading ? "Guardando..." : "Guardar mi aporte"}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* Tab: Historial de gastos */}
+        {activeTab === "history" && (
+          <div className="space-y-3">
+            {expenses.length === 0 ? (
+              <div className="card text-center py-10">
+                <div className="text-4xl mb-3">📋</div>
+                <p className="text-gray-500 text-sm">No hay gastos registrados aún</p>
+              </div>
+            ) : (
+              expenses.map((exp) => {
+                const splitPP = sortedParticipants.length > 0
+                  ? Math.round(exp.amount / sortedParticipants.length)
+                  : 0;
+                return (
+                  <div key={exp.expense_id} className="card space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-100 truncate">{exp.description}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Pagó: {exp.payer_name} · {exp.date}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-accent-green font-semibold">
+                          ${exp.amount.toLocaleString("es-AR")}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          ${splitPP.toLocaleString("es-AR")} c/u
+                        </p>
+                      </div>
+                    </div>
+                    {isHost && (
+                      <div className="flex justify-end pt-1">
+                        {confirmDeleteExpense === exp.expense_id ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDeleteExpense(exp.expense_id)}
+                              className="text-xs px-2 py-1 rounded bg-accent-red/20 text-accent-red hover:bg-accent-red/30 transition-colors"
+                            >
+                              Eliminar
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteExpense(null)}
+                              className="text-xs px-2 py-1 rounded bg-dark-300 text-gray-400 hover:text-gray-200 transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteExpense(exp.expense_id)}
+                            className="text-xs text-gray-600 hover:text-accent-red transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 

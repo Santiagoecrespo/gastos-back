@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import create_access_token, decode_access_token
+from app.core.security import create_access_token, decode_access_token, GUEST_TOKEN_EXPIRE_DAYS
 from app.models.group import Group
 from app.models.participant import Participant
 from app.models.user import User
@@ -123,11 +123,10 @@ def join_group(
                 detail="Solo el anfitrion puede usar este perfil",
             )
 
-    token = create_access_token(data={
-        "sub": participant.id,
-        "group_id": group.id,
-        "type": "guest",
-    })
+    token = create_access_token(
+        data={"sub": participant.id, "group_id": group.id, "type": "guest"},
+        expires_delta=__import__("datetime").timedelta(days=GUEST_TOKEN_EXPIRE_DAYS),
+    )
 
     return JoinResponse(
         participant_id=participant.id,

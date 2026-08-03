@@ -1,8 +1,6 @@
 // src/api/client.ts
 import axios from "axios";
 
-console.log("API URL:", import.meta.env.VITE_API_URL);
-
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
   headers: { "Content-Type": "application/json" },
@@ -35,9 +33,20 @@ client.interceptors.request.use(
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only force-logout on 401 if it's NOT an auth endpoint (avoid login redirect loop)
     const url = error.config?.url ?? "";
     if (error.response?.status === 401 && !url.includes("/auth/")) {
+      // If it's a group endpoint, redirect to the join page instead of /login
+      const groupMatch = url.match(/\/api\/groups\/([^/]+)/);
+      if (groupMatch) {
+        const gid = groupMatch[1];
+        const invToken = localStorage.getItem(`group_invite_token_${gid}`);
+        localStorage.removeItem(`group_token_${gid}`);
+        localStorage.removeItem(`group_participant_${gid}`);
+        if (invToken) {
+          window.location.href = `/g/${invToken}`;
+          return Promise.reject(error);
+        }
+      }
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       window.location.href = "/login";

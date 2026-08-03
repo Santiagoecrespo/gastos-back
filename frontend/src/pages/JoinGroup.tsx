@@ -39,6 +39,7 @@ export default function JoinGroup() {
                 `group_participant_${result.group_id}`,
                 JSON.stringify({ id: result.participant_id, name: result.participant_name })
               );
+              localStorage.setItem(`group_invite_token_${result.group_id}`, inviteToken!);
               navigate(`/group/${result.group_id}`, { replace: true });
               return;
             } catch {
@@ -67,6 +68,7 @@ export default function JoinGroup() {
         `group_participant_${result.group_id}`,
         JSON.stringify({ id: result.participant_id, name: result.participant_name })
       );
+      localStorage.setItem(`group_invite_token_${result.group_id}`, inviteToken!);
       navigate(`/group/${result.group_id}`);
     } catch {
       setError("No se pudo unir al grupo");
