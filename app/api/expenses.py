@@ -6,14 +6,18 @@ REFACTORED to Participant / nametag architecture:
   - get_group / create_expense / get_balances / settle_group → use Guest JWT (Participant)
 """
 
+import asyncio
 import secrets as _secrets
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import decode_access_token
 from app.api.deps import get_current_user, get_current_participant
+from app.api.realtime import manager
 from app.models.user import User
 from app.models.group import Group
 from app.models.participant import Participant
@@ -51,6 +55,47 @@ def _get_participants(group_id: str, db: Session) -> list[Participant]:
 def _assert_in_group(participant: Participant, group_id: str) -> None:
     if participant.group_id != group_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes acceso a este grupo")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# SSE — Server-Sent Events (token via query param, no custom header needed)
+# ══════════════════════════════════════════════════════════════════════════
+@router.get(
+    "/groups/{group_id}/events",
+    summary="SSE stream — broadcasts 'refresh' when group data changes",
+)
+async def group_events(
+    group_id: str,
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if payload.get("type") == "guest" and payload.get("group_id") != group_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token not valid for this group")
+
+    async def stream():
+        q = manager.subscribe(group_id)
+        try:
+            yield "data: connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=25.0)
+                    yield f"data: {event}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"  # keeps Railway/nginx from closing idle connection
+        finally:
+            manager.unsubscribe(group_id, q)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -237,6 +282,7 @@ async def set_my_contribution(
     _assert_in_group(participant, group_id)
     participant.pending_contribution = max(0.0, payload.amount)
     db.commit()
+    await manager.broadcast(group_id, "refresh")
     return {"participant_id": participant.id, "pending_contribution": participant.pending_contribution}
 
 
@@ -326,6 +372,7 @@ async def create_expense(
         p.pending_contribution = 0.0
     db.commit()
 
+    await manager.broadcast(group_id, "refresh")
     return ExpenseResponse(
         expense_id=expense.id,
         amount=expense.amount,
@@ -357,11 +404,9 @@ async def delete_expense(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gasto no encontrado")
     db.delete(expense)
     db.commit()
+    await manager.broadcast(group_id, "refresh")
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 3 — Balance del grupo ajustado por inflacion (guest JWT)
-# ══════════════════════════════════════════════════════════════════════════
 @router.get(
     "/groups/{group_id}/balances",
     response_model=BalanceResponse,
@@ -485,4 +530,5 @@ async def settle_group(
         .update({Expense.is_settled: True})
     )
     db.commit()
+    await manager.broadcast(group_id, "refresh")
     return SettleResponse(message="Grupo saldado correctamente", expenses_settled=count)

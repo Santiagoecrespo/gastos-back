@@ -1,5 +1,5 @@
 ﻿// src/pages/GroupDetail.tsx
-import { useState, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useEffect, useMemo, useRef, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import BalanceCard from "../components/BalanceCard";
@@ -65,6 +65,10 @@ export default function GroupDetail() {
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [settleLoading, setSettleLoading] = useState(false);
 
+  // Keep activeTab accessible in SSE closure without stale ref
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
   // Share link
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -79,6 +83,29 @@ export default function GroupDetail() {
   useEffect(() => {
     if (activeTab === "balances" && id) fetchBalances();
   }, [activeTab, id]);
+
+  // SSE real-time: re-fetch silently whenever the server broadcasts a change
+  useEffect(() => {
+    if (!id) return;
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const token =
+      localStorage.getItem(`group_token_${id}`) ||
+      localStorage.getItem("access_token") ||
+      "";
+    const es = new EventSource(
+      `${apiUrl}/api/groups/${id}/events?token=${encodeURIComponent(token)}`
+    );
+    es.onmessage = (e) => {
+      if (e.data !== "refresh") return;
+      getGroupById(id).then(setGroup).catch(() => {});
+      getExpenses(id).then(setExpenses).catch(() => {});
+      if (activeTabRef.current === "balances") {
+        getBalances(id).then(setBalanceData).catch(() => {});
+      }
+    };
+    es.onerror = () => {}; // browser auto-reconnects; suppress console noise
+    return () => es.close();
+  }, [id]);
 
   const fetchGroup = async () => {
     try {
