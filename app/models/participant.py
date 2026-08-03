@@ -8,6 +8,8 @@ access is granted exclusively via the group's invite_token and a Group-scoped JW
 
 import uuid
 
+from typing import Optional
+
 from sqlalchemy import String, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +30,7 @@ class Participant(Base):
         default=lambda: str(uuid.uuid4()),
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    mp_alias: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     group_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("groups.id", ondelete="CASCADE"),

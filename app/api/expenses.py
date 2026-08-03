@@ -22,6 +22,7 @@ from app.models.expense_share import ExpenseShare
 from app.schemas.group import GroupCreate, GroupResponse, ParticipantOut
 from app.schemas.expense import (
     ExpenseCreate,
+    ContributionIn,
     ExpenseResponse,
     ShareOut,
     BalanceResponse,
@@ -72,7 +73,7 @@ async def list_groups(
             group_id=group.id,
             name=group.name,
             invite_token=group.invite_token,
-            participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
+            participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
         ))
     return result
 
@@ -98,7 +99,7 @@ async def get_group(
         group_id=group.id,
         name=group.name,
         invite_token=group.invite_token,
-        participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
+        participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
     )
 
 
@@ -144,7 +145,7 @@ async def create_group(
         group_id=group.id,
         name=group.name,
         invite_token=group.invite_token,
-        participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
+        participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
     )
 
 
@@ -178,6 +179,15 @@ async def create_expense(
 
     all_participants = _get_participants(group_id, db)
 
+    # Build contribution lookup {participant_id: amount}
+    contrib_map: dict[str, float] = {c.participant_id: c.amount for c in payload.contributions}
+    contrib_total = sum(contrib_map.values())
+    if contrib_total > payload.amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Las contribuciones superan el monto total del gasto",
+        )
+
     expense = Expense(
         group_id=group_id,
         payer_id=payer.id,
@@ -191,10 +201,17 @@ async def create_expense(
     split_per_person = round(payload.amount / len(all_participants), 2)
     shares_out: list[ShareOut] = []
     for p in all_participants:
+        contribution = contrib_map.get(p.id, 0.0)
+        if contribution > split_per_person:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La contribución de {p.name} supera su parte ({split_per_person})",
+            )
         share = ExpenseShare(
             expense_id=expense.id,
             participant_id=p.id,
             amount_owed=split_per_person,
+            contribution=contribution,
         )
         db.add(share)
         shares_out.append(ShareOut(participant_id=p.id, amount_owed=split_per_person))
@@ -228,7 +245,7 @@ async def get_balances(
 
     all_participants = _get_participants(group_id, db)
     participant_map: dict[str, ParticipantOut] = {
-        p.id: ParticipantOut(id=p.id, name=p.name) for p in all_participants
+        p.id: ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in all_participants
     }
     net: dict[str, float] = {p.id: 0.0 for p in all_participants}
 
@@ -250,7 +267,8 @@ async def get_balances(
         original_total = expense.amount
         for share in expense.shares:
             if share.participant_id in net:
-                proportion = share.amount_owed / original_total if original_total else 0
+                effective_owed = share.amount_owed - share.contribution
+                proportion = (effective_owed / original_total) if original_total else 0
                 net[share.participant_id] -= adjusted_amount * proportion
 
     creditors: list[tuple[str, float]] = []

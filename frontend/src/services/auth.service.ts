@@ -1,14 +1,16 @@
 // src/services/auth.service.ts
 import client from "../api/client";
-import type { AuthResponse, AuthUser } from "../types";
+import type { AuthResponse, AuthUser, UserProfile } from "../types";
 
 export async function registerUser(
   email: string,
-  password: string
+  password: string,
+  mpAlias?: string
 ): Promise<AuthUser> {
   const { data } = await client.post<AuthUser>("/auth/signup", {
     email,
     password,
+    mp_alias: mpAlias || null,
   });
   return data;
 }
@@ -17,7 +19,6 @@ export async function loginUser(
   email: string,
   password: string
 ): Promise<{ token: string; user: AuthUser }> {
-  // FastAPI OAuth2PasswordRequestForm expects form-encoded data
   const params = new URLSearchParams();
   params.append("username", email);
   params.append("password", password);
@@ -26,9 +27,13 @@ export async function loginUser(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
 
-  // Decode the JWT payload to extract user info (sub = user id)
   const payload = JSON.parse(atob(data.access_token.split(".")[1]));
   const user: AuthUser = { id: payload.sub, email };
 
   return { token: data.access_token, user };
+}
+
+export async function updateProfile(mpAlias: string | null): Promise<UserProfile> {
+  const { data } = await client.patch<UserProfile>("/auth/profile", { mp_alias: mpAlias });
+  return data;
 }

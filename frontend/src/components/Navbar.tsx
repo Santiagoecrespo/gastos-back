@@ -21,10 +21,16 @@ export default function Navbar() {
           Split<span className="text-accent-green">Wise</span>
         </button>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="text-sm text-gray-400 hidden sm:inline">
             {user?.email}
           </span>
+          <button
+            onClick={() => navigate("/profile")}
+            className="btn-ghost text-sm"
+          >
+            Perfil
+          </button>
           <button onClick={handleLogout} className="btn-ghost text-sm">
             Cerrar sesión
           </button>

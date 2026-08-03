@@ -6,6 +6,8 @@ Two public endpoints — no JWT required:
   POST /api/groups/invite/{invite_token}/join  -> magic login, returns guest JWT
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -21,6 +23,7 @@ router = APIRouter(prefix="/api", tags=["invite"])
 
 class JoinRequest(BaseModel):
     participant_name: str
+    mp_alias: Optional[str] = None
 
 
 @router.get(
@@ -45,7 +48,7 @@ def get_invite_page(invite_token: str, db: Session = Depends(get_db)):
         group_id=group.id,
         group_name=group.name,
         invite_token=group.invite_token,
-        participants=[ParticipantOut(id=p.id, name=p.name) for p in participants],
+        participants=[ParticipantOut(id=p.id, name=p.name, mp_alias=p.mp_alias) for p in participants],
     )
 
 
@@ -83,8 +86,12 @@ def join_group(
         .first()
     )
     if not participant:
-        participant = Participant(name=name, group_id=group.id)
+        participant = Participant(name=name, group_id=group.id, mp_alias=body.mp_alias)
         db.add(participant)
+        db.commit()
+        db.refresh(participant)
+    elif body.mp_alias and not participant.mp_alias:
+        participant.mp_alias = body.mp_alias
         db.commit()
         db.refresh(participant)
 

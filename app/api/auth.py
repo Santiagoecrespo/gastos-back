@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
+from app.api.deps import get_current_user
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, ProfileUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -39,6 +40,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
+        mp_alias=payload.mp_alias,
     )
     db.add(user)
     db.commit()
@@ -73,3 +75,22 @@ def login(
 
     access_token = create_access_token(data={"sub": user.id})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+# --------------------------------------------------------------------------
+# PATCH /auth/profile
+# --------------------------------------------------------------------------
+@router.patch(
+    "/profile",
+    response_model=UserResponse,
+    summary="Update authenticated user's profile",
+)
+def update_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.mp_alias = payload.mp_alias
+    db.commit()
+    db.refresh(current_user)
+    return current_user

@@ -54,6 +54,27 @@ async def lifespan(app: FastAPI):
                     )
                 conn.commit()
 
+        # Add mp_alias to users if missing
+        if "users" in tables:
+            u_cols = [c["name"] for c in inspector.get_columns("users")]
+            if "mp_alias" not in u_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN mp_alias VARCHAR(100)"))
+                conn.commit()
+
+        # Add mp_alias to participants if missing
+        if "participants" in tables:
+            p_cols = [c["name"] for c in inspector.get_columns("participants")]
+            if "mp_alias" not in p_cols:
+                conn.execute(text("ALTER TABLE participants ADD COLUMN mp_alias VARCHAR(100)"))
+                conn.commit()
+
+        # Add contribution to expense_shares if missing
+        if "expense_shares" in tables:
+            es_cols = [c["name"] for c in inspector.get_columns("expense_shares")]
+            if "contribution" not in es_cols:
+                conn.execute(text("ALTER TABLE expense_shares ADD COLUMN contribution FLOAT NOT NULL DEFAULT 0"))
+                conn.commit()
+
     # Create all tables (new ones + recreated ones)
     Base.metadata.create_all(bind=engine)
     yield

@@ -10,10 +10,16 @@ export interface AuthUser {
   email: string;
 }
 
-// Replaces UserBrief — participants have a name, not an email
+export interface UserProfile {
+  id: string;
+  email: string;
+  mp_alias: string | null;
+}
+
 export interface ParticipantOut {
   id: string;
   name: string;
+  mp_alias?: string | null;
 }
 
 export interface GroupResponse {
@@ -36,6 +42,11 @@ export interface JoinResponse {
   group_id: string;
   group_name: string;
   token: string;
+}
+
+export interface ContributionIn {
+  participant_id: string;
+  amount: number;
 }
 
 export interface ShareOut {

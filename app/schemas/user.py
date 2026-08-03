@@ -1,22 +1,27 @@
 """Pydantic schemas for the User resource."""
 
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
     """Schema for creating a new user."""
-
     email: EmailStr
-    password: str = Field(min_length=8, description="Plain-text password (will be hashed server-side)")
+    password: str = Field(min_length=8)
+    mp_alias: Optional[str] = None
+
+
+class ProfileUpdate(BaseModel):
+    mp_alias: Optional[str] = None
 
 
 class UserResponse(BaseModel):
     """Schema returned to the client after user creation / retrieval."""
-
     id: str
     email: EmailStr
+    mp_alias: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

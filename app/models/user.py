@@ -3,6 +3,8 @@
 import uuid
 from datetime import datetime, timezone
 
+from typing import Optional
+
 from sqlalchemy import String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +26,7 @@ class User(Base):
         index=True,
     )
     hashed_password: Mapped[str] = mapped_column(String(128), nullable=False)
+    mp_alias: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

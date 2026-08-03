@@ -1,19 +1,26 @@
 ﻿"""Pydantic schemas for Expense and Balance endpoints (Participant architecture)."""
 
 from datetime import date
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
 from app.schemas.group import ParticipantOut
 
 
-# ── Expense request / response ────────────────────────────────────────────
+# ── Expense request / response ────────────────────────────────────
+
+class ContributionIn(BaseModel):
+    participant_id: str
+    amount: float = Field(ge=0)
+
 
 class ExpenseCreate(BaseModel):
     amount: float = Field(gt=0)
     description: str = Field(min_length=1)
     date: date
-    payer_id: str  # Participant.id
+    payer_id: str
+    contributions: list[ContributionIn] = []
 
 
 class ShareOut(BaseModel):

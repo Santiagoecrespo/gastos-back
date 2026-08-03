@@ -32,7 +32,13 @@ export async function getGroupById(groupId: string): Promise<GroupResponse> {
 
 export async function addExpense(
   groupId: string,
-  payload: { amount: number; description: string; date: string; payer_id: string }
+  payload: {
+    amount: number;
+    description: string;
+    date: string;
+    payer_id: string;
+    contributions?: { participant_id: string; amount: number }[];
+  }
 ): Promise<ExpenseResponse> {
   const { data } = await client.post<ExpenseResponse>(
     `/api/groups/${groupId}/expenses`,

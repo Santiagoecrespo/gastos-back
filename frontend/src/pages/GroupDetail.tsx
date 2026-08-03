@@ -33,6 +33,7 @@ export default function GroupDetail() {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [payerId, setPayerId] = useState("");
+  const [contributions, setContributions] = useState<Record<string, string>>({});
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [expenseError, setExpenseError] = useState("");
   const [expenseSuccess, setExpenseSuccess] = useState("");
@@ -92,11 +93,16 @@ export default function GroupDetail() {
 
     setExpenseLoading(true);
     try {
+      const contributionsArr = Object.entries(contributions)
+        .map(([participant_id, val]) => ({ participant_id, amount: parseFloat(val) || 0 }))
+        .filter((c) => c.amount > 0);
+
       const result = await addExpense(id!, {
         amount: numAmount,
         description,
         date,
         payer_id: payerId,
+        contributions: contributionsArr,
       });
       setExpenseSuccess(
         `Gasto registrado: $${result.amount.toLocaleString("es-AR")} dividido en $${result.split_per_person.toLocaleString("es-AR")} por persona`
@@ -104,6 +110,7 @@ export default function GroupDetail() {
       setDescription("");
       setAmount("");
       setDate(new Date().toISOString().split("T")[0]);
+      setContributions({});
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
         const axiosErr = err as { response?: { data?: { detail?: string } } };
@@ -267,6 +274,34 @@ export default function GroupDetail() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Contribuciones previas */}
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">
+                ¿Alguien ya aportó algo? <span className="text-gray-600">(opcional)</span>
+              </label>
+              <p className="text-xs text-gray-600 mb-2">
+                Si alguien trajo algo antes de dividir, ingresá el monto acá
+              </p>
+              <div className="space-y-2">
+                {group?.participants.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <span className="text-sm text-gray-300 flex-1">{p.name}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={contributions[p.id] ?? ""}
+                      onChange={(e) =>
+                        setContributions((prev) => ({ ...prev, [p.id]: e.target.value }))
+                      }
+                      placeholder="ej: 2000"
+                      className="input w-32 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
 
             {expenseError && (

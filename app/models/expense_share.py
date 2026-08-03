@@ -29,6 +29,7 @@ class ExpenseShare(Base):
         nullable=False,
     )
     amount_owed: Mapped[float] = mapped_column(Float, nullable=False)
+    contribution: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
 
     # Relationships
     expense: Mapped["Expense"] = relationship("Expense", back_populates="shares")

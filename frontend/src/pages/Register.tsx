@@ -8,6 +8,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [mpAlias, setMpAlias] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -29,7 +30,7 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await registerUser(email, password);
+      await registerUser(email, password, mpAlias.trim() || undefined);
       // Auto-login after registration
       const { token, user } = await loginUser(email, password);
       login(user, token);
@@ -103,6 +104,23 @@ export default function Register() {
               className="input"
               autoComplete="new-password"
             />
+          </div>
+
+          <div>
+            <label htmlFor="reg-alias" className="text-sm text-gray-400 block mb-1">
+              Tu alias de Mercado Pago <span className="text-gray-600">(opcional)</span>
+            </label>
+            <input
+              id="reg-alias"
+              type="text"
+              value={mpAlias}
+              onChange={(e) => setMpAlias(e.target.value)}
+              placeholder="ej: juan.garcia.mp"
+              className="input"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              Tus amigos lo van a ver para transferirte
+            </p>
           </div>
 
           {error && (

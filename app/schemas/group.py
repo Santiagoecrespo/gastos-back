@@ -1,14 +1,17 @@
 """Pydantic schemas for Group endpoints (Participant / nametag architecture)."""
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
-# ── Participant (“nametag”) ────────────────────────────────────────────
+# ── Participant ("nametag") ──────────────────────────────────────
 
 class ParticipantOut(BaseModel):
     """Minimal participant representation (replaces UserBrief)."""
     id: str
     name: str
+    mp_alias: Optional[str] = None
 
 
 # ── Request schemas ──────────────────────────────────────────────────────
