@@ -10,6 +10,7 @@ export default function JoinGroup() {
 
   const [groupName, setGroupName] = useState("");
   const [groupId, setGroupId] = useState("");
+  const [hostParticipantId, setHostParticipantId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<ParticipantOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -28,6 +29,7 @@ export default function JoinGroup() {
         }
         setGroupName(info.group_name);
         setGroupId(info.group_id);
+        setHostParticipantId(info.host_participant_id ?? null);
         setParticipants(info.participants);
       })
       .catch(() => setError("Link inválido o expirado"))
@@ -91,16 +93,25 @@ export default function JoinGroup() {
         {/* Existing participants */}
         {participants.length > 0 && (
           <div className="space-y-2">
-            {participants.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handleJoin(p.name)}
-                disabled={joining}
-                className="btn-ghost w-full text-left"
-              >
-                {p.name}
-              </button>
-            ))}
+            {participants.map((p) => {
+              const isHostProfile = p.id === hostParticipantId;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => !isHostProfile && handleJoin(p.name)}
+                  disabled={joining || isHostProfile}
+                  title={isHostProfile ? "Este perfil es del anfitrion" : undefined}
+                  className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
+                    isHostProfile
+                      ? "border-yellow-500/30 bg-yellow-500/5 text-yellow-400 cursor-not-allowed opacity-70"
+                      : "btn-ghost"
+                  }`}
+                >
+                  {p.name}
+                  {isHostProfile && <span className="ml-2 text-xs">(Anfitrion - no disponible)</span>}
+                </button>
+              );
+            })}
           </div>
         )}
 

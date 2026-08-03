@@ -49,6 +49,7 @@ export default function GroupDetail() {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [payerId, setPayerId] = useState("");
+  const [hostContributions, setHostContributions] = useState<Record<string, string>>({});
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [expenseError, setExpenseError] = useState("");
   const [expenseSuccess, setExpenseSuccess] = useState("");
@@ -83,6 +84,12 @@ export default function GroupDetail() {
       if (groupData.participants.length > 0) {
         const hostId = groupData.host_participant_id;
         setPayerId(hostId || groupData.participants[0].id);
+        // Pre-fill host contributions from pending_contribution
+        const initContribs: Record<string, string> = {};
+        groupData.participants.forEach((p) => {
+          if (p.pending_contribution > 0) initContribs[p.id] = String(p.pending_contribution);
+        });
+        setHostContributions(initContribs);
         const myP = groupData.participants.find((p) => p.id === currentParticipantId);
         if (myP && myP.pending_contribution > 0) {
           setMyContribInput(String(myP.pending_contribution));
@@ -122,7 +129,9 @@ export default function GroupDetail() {
         description,
         date,
         payer_id: payerId,
-        contributions: [],
+        contributions: Object.entries(hostContributions)
+          .map(([participant_id, val]) => ({ participant_id, amount: parseFloat(val) || 0 }))
+          .filter((c) => c.amount > 0),
       });
       setExpenseSuccess(
         `Gasto registrado: $${result.amount.toLocaleString("es-AR")} — $${result.split_per_person.toLocaleString("es-AR")} por persona`
@@ -130,6 +139,7 @@ export default function GroupDetail() {
       setDescription("");
       setAmount("");
       setDate(new Date().toISOString().split("T")[0]);
+      setHostContributions({});
       const [refreshed, refreshedExp] = await Promise.all([
         getGroupById(id!),
         getExpenses(id!).catch(() => [] as ExpenseListItem[]),
@@ -357,14 +367,15 @@ export default function GroupDetail() {
                     </span>
                     <input
                       type="number"
-                      value={p.pending_contribution > 0 ? p.pending_contribution : ""}
-                      readOnly
+                      min="0"
+                      step="0.01"
+                      value={hostContributions[p.id] ?? ""}
+                      onChange={(e) =>
+                        setHostContributions((prev) => ({ ...prev, [p.id]: e.target.value }))
+                      }
                       placeholder="Sin aporte"
-                      className="input w-32 text-sm opacity-50 cursor-not-allowed"
+                      className="input w-32 text-sm"
                     />
-                    <span className="text-xs text-gray-600 whitespace-nowrap w-20">
-                      {p.pending_contribution > 0 ? "ingresado" : "sin aporte"}
-                    </span>
                   </div>
                 ))}
               </div>
