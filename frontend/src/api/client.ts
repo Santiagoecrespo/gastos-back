@@ -8,12 +8,15 @@ const client = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Smart JWT: prefer group-scoped token for group-specific routes
+// Smart JWT: prefer group-scoped token for group-specific routes,
+// but user-only methods (DELETE on root group) always use access_token
 client.interceptors.request.use(
   (config) => {
     const url = config.url ?? "";
+    const method = (config.method ?? "").toLowerCase();
     const groupMatch = url.match(/\/api\/groups\/([^/]+)/);
-    if (groupMatch) {
+    const isRootGroupDelete = groupMatch && method === "delete" && !url.replace(`/api/groups/${groupMatch[1]}`, "").startsWith("/");
+    if (groupMatch && !isRootGroupDelete) {
       const groupToken = localStorage.getItem(`group_token_${groupMatch[1]}`);
       if (groupToken && config.headers) {
         config.headers.Authorization = `Bearer ${groupToken}`;
