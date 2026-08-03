@@ -20,13 +20,33 @@ export default function JoinGroup() {
   useEffect(() => {
     if (!inviteToken) return;
     getInvitePage(inviteToken)
-      .then((info) => {
-        // Already have a group token for this group? Go directly in.
+      .then(async (info) => {
         const stored = localStorage.getItem(`group_token_${info.group_id}`);
         if (stored) {
           navigate(`/group/${info.group_id}`, { replace: true });
           return;
         }
+
+        // Authenticated user (host) auto-joins their own profile
+        const accessToken = localStorage.getItem("access_token");
+        if (accessToken && info.host_participant_id) {
+          const hostP = info.participants.find((p) => p.id === info.host_participant_id);
+          if (hostP) {
+            try {
+              const result = await joinGroup(inviteToken, hostP.name);
+              localStorage.setItem(`group_token_${result.group_id}`, result.token);
+              localStorage.setItem(
+                `group_participant_${result.group_id}`,
+                JSON.stringify({ id: result.participant_id, name: result.participant_name })
+              );
+              navigate(`/group/${result.group_id}`, { replace: true });
+              return;
+            } catch {
+              // fall through to show the page if auto-join fails
+            }
+          }
+        }
+
         setGroupName(info.group_name);
         setGroupId(info.group_id);
         setHostParticipantId(info.host_participant_id ?? null);
