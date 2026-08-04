@@ -1,6 +1,7 @@
 // src/components/BalanceCard.tsx
+import { useState } from "react";
 import type { BalanceTransaction } from "../types";
-import PaymentButtons from "./PaymentButtons";
+import PaymentSheet from "./PaymentSheet";
 
 interface Props {
   transaction: BalanceTransaction;
@@ -9,6 +10,7 @@ interface Props {
 
 export default function BalanceCard({ transaction, currentParticipantId }: Props) {
   const { from_participant, to_participant, amount_adjusted } = transaction;
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const iDebtor = from_participant.id === currentParticipantId;
   const iCreditor = to_participant.id === currentParticipantId;
@@ -45,15 +47,28 @@ export default function BalanceCard({ transaction, currentParticipantId }: Props
             </span>
           </div>
 
-          {/* Alias y botones de pago — solo visible al deudor */}
+          {/* Payment CTA — only visible to debtor */}
           {iDebtor && (
             to_participant.mp_alias ? (
-              <>
-                <p className="mt-2 text-xs text-gray-400">
-                  📲 Alias: <span className="text-gray-200 font-medium">{to_participant.mp_alias}</span>
+              <div className="mt-3">
+                <p className="text-xs text-gray-400 mb-2">
+                  📲 Alias: <span className="text-gray-200 font-medium font-mono">{to_participant.mp_alias}</span>
                 </p>
-                <PaymentButtons alias={to_participant.mp_alias} amount={amount_adjusted} />
-              </>
+                <button
+                  onClick={() => setSheetOpen(true)}
+                  className="bg-accent-green/10 text-accent-green border border-accent-green/30 text-sm font-medium
+                             px-4 py-2 rounded-lg hover:bg-accent-green/20 active:scale-[0.97] transition-all duration-150"
+                >
+                  💸 Pagar
+                </button>
+                <PaymentSheet
+                  alias={to_participant.mp_alias}
+                  amount={amount_adjusted}
+                  recipientName={to_participant.name}
+                  open={sheetOpen}
+                  onClose={() => setSheetOpen(false)}
+                />
+              </div>
             ) : (
               <p className="mt-2 text-xs text-gray-500">
                 ⚠️ {to_participant.name} no cargó su alias de pago aún

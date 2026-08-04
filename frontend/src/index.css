@@ -65,3 +65,17 @@ body {
            rounded-full bg-dark-100 border border-dark-300 text-gray-400;
   }
 }
+
+/* ── Animations ───────────────────────────────────────────────────────── */
+@keyframes toast-in {
+  0% { opacity: 0; transform: translate(-50%, -12px); }
+  100% { opacity: 1; transform: translate(-50%, 0); }
+}
+.animate-toast {
+  animation: toast-in 0.25s ease-out;
+}
+
+/* ── Safe area for notched phones ─────────────────────────────────────── */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 12px);
+}
