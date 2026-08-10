@@ -65,7 +65,8 @@ async def lifespan(app: FastAPI):
         if "users" in tables:
             u_cols = [c["name"] for c in inspector.get_columns("users")]
             if "email_verified" not in u_cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0"))
+                # FALSE works for both PostgreSQL in production and local SQLite.
+                conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE"))
                 conn.commit()
 
         # Add mp_alias to participants if missing

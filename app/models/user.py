@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from typing import Optional
 
-from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy import String, DateTime, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -30,7 +30,7 @@ class User(Base):
     # A user can only obtain an application token after proving ownership of
     # this address through the one-time code sent by email.
     email_verified: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
