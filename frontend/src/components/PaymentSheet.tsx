@@ -10,20 +10,24 @@ interface Props {
 
 interface Platform {
   name: string;
-  url: string | null;
+  packageName?: string;
+  fallbackUrl?: string;
   tone: string;
 }
 
-// Official universal links let Android/iOS open the installed wallet when the
-// platform supports it, and fall back to its website on desktop.
 const PLATFORMS: Platform[] = [
-  { name: "Mercado Pago", url: "https://www.mercadopago.com.ar/", tone: "border-blue-500/30 hover:bg-blue-500/10" },
-  { name: "Uala", url: "https://www.uala.com.ar/", tone: "border-purple-500/30 hover:bg-purple-500/10" },
-  { name: "Naranja X", url: "https://www.naranjax.com/", tone: "border-orange-500/30 hover:bg-orange-500/10" },
-  { name: "MODO", url: "https://www.modo.com.ar/", tone: "border-gray-500/30 hover:bg-gray-500/10" },
-  { name: "Prex", url: "https://www.prexcard.com/", tone: "border-green-500/30 hover:bg-green-500/10" },
-  { name: "Solo copiar", url: null, tone: "border-dark-300 hover:bg-dark-200" },
+  { name: "Mercado Pago", packageName: "com.mercadopago.wallet", fallbackUrl: "https://www.mercadopago.com.ar/", tone: "border-blue-500/30 hover:bg-blue-500/10" },
+  { name: "Ualá", packageName: "ar.com.bancar.uala", fallbackUrl: "https://www.uala.com.ar/", tone: "border-purple-500/30 hover:bg-purple-500/10" },
+  { name: "Naranja X", packageName: "com.tarjetanaranja.ncuenta", fallbackUrl: "https://www.naranjax.com/", tone: "border-orange-500/30 hover:bg-orange-500/10" },
+  { name: "MODO", packageName: "com.playdigital.modo", fallbackUrl: "https://www.modo.com.ar/", tone: "border-sky-500/30 hover:bg-sky-500/10" },
+  { name: "Prex", packageName: "air.Prex", fallbackUrl: "https://www.prexcard.com/", tone: "border-green-500/30 hover:bg-green-500/10" },
+  { name: "Solo copiar", tone: "border-dark-300 hover:bg-dark-200" },
 ];
+
+function androidLaunchIntent(packageName: string, fallbackUrl: string) {
+  const fallback = encodeURIComponent(fallbackUrl);
+  return `intent://open#Intent;scheme=juntacuentas;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${packageName};S.browser_fallback_url=${fallback};end`;
+}
 
 export default function PaymentSheet({ alias, amount, recipientName, open, onClose }: Props) {
   const [toast, setToast] = useState("");
@@ -48,7 +52,7 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
 
   const notify = (message: string) => {
     setToast(message);
-    setTimeout(() => setToast(""), 2800);
+    setTimeout(() => setToast(""), 3200);
   };
 
   const copyAlias = async () => {
@@ -66,21 +70,19 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
   };
 
   const openPlatform = async (platform: Platform) => {
-    if (!platform.url) {
-      await copyAlias();
+    await copyAlias();
+    if (!platform.packageName || !platform.fallbackUrl) {
       notify("Alias copiado. Pegalo en la billetera que uses.");
       return;
     }
 
-    // This opens a tab during the tap itself. Delaying window.open after the
-    // clipboard promise causes mobile browsers to block it as a popup.
-    const paymentWindow = window.open("", "_blank");
-    if (paymentWindow) paymentWindow.opener = null;
-    await copyAlias();
-    notify(`Alias copiado. Abriendo ${platform.name}...`);
-    if (paymentWindow) paymentWindow.location.replace(platform.url);
-    else window.location.assign(platform.url);
-    close();
+    if (/Android/i.test(navigator.userAgent)) {
+      notify(`Alias copiado. Abriendo ${platform.name}...`);
+      window.location.href = androidLaunchIntent(platform.packageName, platform.fallbackUrl);
+      return;
+    }
+
+    notify(`Alias copiado. Abrí ${platform.name} en tu celular y pegalo para transferir.`);
   };
 
   if (!open) return null;
@@ -95,12 +97,12 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
           <div className="px-5 pb-6">
             <div className="text-center mb-5"><p className="text-sm text-gray-400 mb-1">Pagar a {recipientName}</p><p className="text-2xl font-bold text-accent-red">{formattedAmount}</p></div>
             <div className="bg-dark-100 rounded-lg px-4 py-3 mb-4 flex items-center justify-between border border-dark-300"><div><p className="text-xs text-gray-500">Alias de pago</p><p className="text-sm font-mono text-gray-200 mt-0.5">{alias}</p></div><button onClick={() => void copyAlias().then(() => notify("Alias copiado"))} className="text-xs text-accent-green font-medium px-2 py-1 rounded hover:bg-accent-green/10">Copiar</button></div>
-            <button onClick={() => void openPlatform(PLATFORMS[0])} className="w-full bg-accent-green text-dark font-bold py-3.5 px-6 rounded-xl text-base hover:brightness-110 active:scale-[0.98] transition-all mb-4">Copiar alias y pagar</button>
-            <p className="text-xs text-gray-500 mb-2">Abri la billetera que uses:</p>
+            <button onClick={() => void openPlatform(PLATFORMS[0])} className="w-full bg-accent-green text-dark font-bold py-3.5 px-6 rounded-xl text-base hover:brightness-110 active:scale-[0.98] transition-all mb-4">Pagar con Mercado Pago</button>
+            <p className="text-xs text-gray-500 mb-2">Elegí la billetera donde vas a hacer la transferencia:</p>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {PLATFORMS.map((platform) => <button key={platform.name} type="button" onClick={() => void openPlatform(platform)} className={`px-2 py-3 rounded-lg bg-dark-100 border text-xs text-gray-300 transition-all active:scale-[0.96] ${platform.tone}`}>{platform.name}</button>)}
             </div>
-            <p className="text-[11px] text-gray-600 text-center">Tu alias se copia antes de abrir la aplicacion de pago.</p>
+            <p className="text-[11px] text-gray-600 text-center">El alias se copia primero. En Android abrimos la app elegida; en otros dispositivos lo pegás en tu billetera.</p>
             <button onClick={close} className="w-full mt-3 py-2.5 text-sm text-gray-500 hover:text-gray-300">Cancelar</button>
           </div>
         </div>

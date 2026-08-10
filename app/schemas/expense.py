@@ -49,6 +49,7 @@ class BalanceResponse(BaseModel):
     balances: list[BalanceTransaction]
     total_transactions: int
     all_settled: bool
+    inflation_note: str
 
 
 # ── Settle response ───────────────────────────────────────────────────────

@@ -77,6 +77,7 @@ export interface BalanceResponse {
   balances: BalanceTransaction[];
   total_transactions: number;
   all_settled: boolean;
+  inflation_note: string;
 }
 
 export interface SettleResponse {

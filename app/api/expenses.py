@@ -434,10 +434,17 @@ async def get_balances(
     )
 
     today = date.today()
+    inflation_applied = False
+    inflation_unavailable = False
+    inflation_reference_date = today
 
     for expense in expenses:
         info = await adjust_for_inflation(expense.amount, expense.date, today)
         adjusted_amount = info["adjusted"]
+        inflation_applied = inflation_applied or info["inflation_applied"]
+        inflation_unavailable = inflation_unavailable or not info["inflation_applied"]
+        if info["inflation_applied"]:
+            inflation_reference_date = info["reference_date"]
 
         if expense.payer_id in net:
             net[expense.payer_id] += adjusted_amount
@@ -471,7 +478,7 @@ async def get_balances(
                 from_participant=participant_map[debtor_id],
                 to_participant=participant_map[creditor_id],
                 amount_adjusted=round(transfer, 2),
-                reference_date=today,
+                reference_date=inflation_reference_date,
             ))
         creditors[ci] = (creditor_id, credit - transfer)
         debtors[di] = (debtor_id, debt - transfer)
@@ -480,11 +487,21 @@ async def get_balances(
         if debtors[di][1] < 0.01:
             di += 1
 
+    if inflation_applied:
+        inflation_note = "Los importes incluyen el ajuste según el IPC nacional publicado por INDEC."
+        if inflation_unavailable:
+            inflation_note += " Los gastos sin un IPC aplicable se mantienen sin cambios."
+    elif expenses and inflation_unavailable:
+        inflation_note = "Sin ajuste por inflación: INDEC no tiene un IPC aplicable para esas fechas o no se pudo consultar."
+    else:
+        inflation_note = "No hay gastos pendientes para ajustar."
+
     return BalanceResponse(
         group_id=group_id,
         balances=transactions,
         total_transactions=len(transactions),
         all_settled=len(expenses) == 0,
+        inflation_note=inflation_note,
     )
 
 

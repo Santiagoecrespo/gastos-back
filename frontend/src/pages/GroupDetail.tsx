@@ -664,11 +664,13 @@ export default function GroupDetail() {
                   )}
 
                   <div className="space-y-3">
+                    <p className="text-xs text-gray-400 px-1">{balanceData.inflation_note}</p>
                     {visibleBalances.map((tx, i) => (
                       <BalanceCard
                         key={i}
                         transaction={tx}
                         currentParticipantId={currentParticipantId}
+                        inflationNote={balanceData.inflation_note}
                       />
                     ))}
                   </div>
