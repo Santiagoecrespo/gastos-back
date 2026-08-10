@@ -72,11 +72,16 @@ export async function getInvitePage(inviteToken: string): Promise<InvitePageResp
 export async function joinGroup(
   inviteToken: string,
   participantName: string,
-  userJwt?: string
+  userJwt?: string,
+  mpAlias?: string
 ): Promise<JoinResponse> {
   const { data } = await client.post<JoinResponse>(
     `/api/groups/invite/${inviteToken}/join`,
-    { participant_name: participantName, user_jwt: userJwt ?? null }
+    {
+      participant_name: participantName,
+      user_jwt: userJwt ?? null,
+      mp_alias: mpAlias?.trim() || null,
+    }
   );
   return data;
 }

@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import GroupDetail from "./pages/GroupDetail";
 import JoinGroup from "./pages/JoinGroup";
 import Profile from "./pages/Profile";
+import Landing from "./pages/Landing";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* Public */}
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           {/* Zero-friction join (no auth required) */}
@@ -23,7 +25,7 @@ export default function App() {
           <Route path="/group/:id" element={<GroupDetail />} />
 
           {/* Protected */}
-          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />

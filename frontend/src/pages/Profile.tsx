@@ -32,7 +32,7 @@ export default function Profile() {
       <Navbar />
       <main className="max-w-md mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate("/")} className="btn-ghost px-2 py-1">
+          <button onClick={() => navigate("/dashboard")} className="btn-ghost px-2 py-1">
             ←
           </button>
           <h1 className="text-2xl font-bold">Mi perfil</h1>

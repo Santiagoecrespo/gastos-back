@@ -16,6 +16,7 @@ export default function JoinGroup() {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
   const [newName, setNewName] = useState("");
+  const [mpAlias, setMpAlias] = useState("");
 
   useEffect(() => {
     if (!inviteToken) return;
@@ -62,7 +63,7 @@ export default function JoinGroup() {
     setJoining(true);
     setError("");
     try {
-      const result = await joinGroup(inviteToken, name);
+      const result = await joinGroup(inviteToken, name, undefined, mpAlias);
       localStorage.setItem(`group_token_${result.group_id}`, result.token);
       localStorage.setItem(
         `group_participant_${result.group_id}`,
@@ -136,6 +137,21 @@ export default function JoinGroup() {
             })}
           </div>
         )}
+
+        <div>
+          <label htmlFor="guest-alias" className="text-xs text-gray-500 block mb-1">
+            Alias para cobrar <span className="text-gray-600">(opcional)</span>
+          </label>
+          <input
+            id="guest-alias"
+            type="text"
+            placeholder="ej: tu.alias"
+            value={mpAlias}
+            onChange={(e) => setMpAlias(e.target.value)}
+            className="input text-sm"
+          />
+          <p className="text-xs text-gray-600 mt-1">Lo veran solo si te tienen que transferir.</p>
+        </div>
 
         {/* New name entry */}
         <div className="border-t border-dark-300 pt-4 space-y-3">

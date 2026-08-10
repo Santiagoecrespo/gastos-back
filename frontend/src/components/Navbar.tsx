@@ -15,7 +15,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 bg-dark/80 backdrop-blur-md border-b border-dark-300">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/dashboard")}
           className="text-lg font-bold tracking-tight text-gray-100 hover:text-accent-green transition-colors"
         >
           Split<span className="text-accent-green">Wise</span>

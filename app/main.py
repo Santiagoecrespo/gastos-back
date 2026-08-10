@@ -61,6 +61,13 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("ALTER TABLE users ADD COLUMN mp_alias VARCHAR(100)"))
                 conn.commit()
 
+        # Passwordless sign-in requires a persisted mailbox-verification flag.
+        if "users" in tables:
+            u_cols = [c["name"] for c in inspector.get_columns("users")]
+            if "email_verified" not in u_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0"))
+                conn.commit()
+
         # Add mp_alias to participants if missing
         if "participants" in tables:
             p_cols = [c["name"] for c in inspector.get_columns("participants")]

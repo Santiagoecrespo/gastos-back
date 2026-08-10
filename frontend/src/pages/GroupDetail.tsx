@@ -262,7 +262,7 @@ export default function GroupDetail() {
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="card text-center py-12">
             <p className="text-accent-red mb-4">{error}</p>
-            <button onClick={() => navigate("/")} className="btn-ghost">
+            <button onClick={() => navigate("/dashboard")} className="btn-ghost">
               Volver al dashboard
             </button>
           </div>
@@ -281,7 +281,7 @@ export default function GroupDetail() {
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate("/")} className="btn-ghost px-2 py-1">
+          <button onClick={() => navigate("/dashboard")} className="btn-ghost px-2 py-1">
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold truncate">{group?.name}</h1>
