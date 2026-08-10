@@ -5,15 +5,15 @@ export default {
     extend: {
       colors: {
         dark: {
-          DEFAULT: "#17324D",
+          DEFAULT: "#0B4F80",
           50: "#FFFFFF",
           100: "#F4FAFF",
-          200: "#E6F3FC",
-          300: "#C5E0F2",
+          200: "#D9F0FF",
+          300: "#9DD8FA",
         },
         accent: {
-          green: "#3C8DDB",
-          red: "#C95B5B",
+          green: "#008ED6",
+          red: "#D84F5F",
         },
       },
       fontFamily: {

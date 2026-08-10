@@ -13,6 +13,7 @@
 
 body {
   @apply bg-sky-50 text-slate-900 font-sans antialiased;
+  background-image: radial-gradient(circle at 82% 0%, #c7ebff 0, transparent 34%), linear-gradient(135deg, #edf9ff 0%, #f7fcff 58%, #e1f4ff 100%);
   min-height: 100vh;
 }
 
@@ -21,20 +22,20 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #e6f3fc;
+  background: #d9f0ff;
 }
 ::-webkit-scrollbar-thumb {
-  background: #9bc5e8;
+  background: #5cb5ea;
   border-radius: 3px;
 }
 
 /* ── Custom utilities ─────────────────────────────────────────────────── */
 @layer components {
   .card {
-    @apply bg-white border border-sky-100 rounded-xl p-5 transition-all duration-200;
+    @apply bg-white border border-sky-200 rounded-xl p-5 transition-all duration-200;
   }
   .card:hover {
-    @apply border-sky-200 shadow-lg shadow-sky-100/60;
+    @apply border-sky-400 shadow-lg shadow-sky-200/70;
   }
 
   .btn-primary {
