@@ -1,8 +1,4 @@
-"""Transactional email delivery for passwordless authentication.
-
-SMTP keeps the application provider-neutral: Resend, Brevo, Mailgun and a
-company mailbox can all be used by supplying their SMTP credentials.
-"""
+"""Transactional emails for JuntaCuentas."""
 
 import os
 import smtplib
@@ -13,20 +9,17 @@ class EmailDeliveryError(Exception):
     """Raised when the configured provider cannot accept a transactional email."""
 
 
-def send_login_code(recipient: str, code: str) -> None:
+def _send(recipient: str, subject: str, content: str) -> None:
     host = os.environ.get("SMTP_HOST")
     sender = os.environ.get("EMAIL_FROM")
     if not host or not sender:
         raise EmailDeliveryError("El servicio de email no esta configurado")
 
     message = EmailMessage()
-    message["Subject"] = f"{code} es tu codigo para SplitWise"
+    message["Subject"] = subject
     message["From"] = sender
     message["To"] = recipient
-    message.set_content(
-        f"Tu codigo para ingresar a SplitWise es: {code}\n\n"
-        "Vence en 10 minutos. Si no solicitaste este codigo, podes ignorar este email."
-    )
+    message.set_content(content)
 
     port = int(os.environ.get("SMTP_PORT", "587"))
     username = os.environ.get("SMTP_USERNAME")
@@ -43,4 +36,14 @@ def send_login_code(recipient: str, code: str) -> None:
                 smtp.login(username, password)
             smtp.send_message(message)
     except (OSError, smtplib.SMTPException) as exc:
-        raise EmailDeliveryError("No se pudo enviar el email de acceso") from exc
+        raise EmailDeliveryError("No se pudo enviar el email") from exc
+
+
+def send_login_notification(recipient: str) -> None:
+    """Notify the account owner after a successful password login."""
+    _send(
+        recipient,
+        "Nuevo ingreso a JuntaCuentas",
+        "Hola, detectamos un nuevo ingreso a tu cuenta de JuntaCuentas.\n\n"
+        "Si fuiste vos, no tenes que hacer nada. Si no reconoces este acceso, cambia tu contrasena.",
+    )

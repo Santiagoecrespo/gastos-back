@@ -13,18 +13,6 @@ class UserCreate(BaseModel):
     mp_alias: Optional[str] = None
 
 
-class EmailCodeRequest(BaseModel):
-    """Starts passwordless sign-in. Receiving the code proves mailbox ownership."""
-
-    email: EmailStr
-    mp_alias: Optional[str] = Field(default=None, max_length=100)
-
-
-class EmailCodeVerify(BaseModel):
-    email: EmailStr
-    code: str = Field(pattern=r"^\d{6}$")
-
-
 class ProfileUpdate(BaseModel):
     mp_alias: Optional[str] = None
 

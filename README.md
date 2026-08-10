@@ -1,4 +1,4 @@
-# SplitWise
+# JuntaCuentas
 
 Web app for splitting group expenses and collecting transfers from local wallets.
 
@@ -8,10 +8,9 @@ The frontend is deployed from `frontend/` on Vercel. Set `VITE_API_URL` there to
 the public FastAPI backend URL. The backend needs `DATABASE_URL`, `SECRET_KEY`
 and the SMTP variables documented in [`.env.example`](.env.example).
 
-Email sign-in is intentionally passwordless: `/auth/request-code` emails a
-six-digit code and `/auth/verify-code` creates or verifies the account only
-after the mailbox owner enters it. Do not deploy without SMTP configured; the
-API returns an explicit error instead of pretending that an email was sent.
+Hosts sign in with email and password. After a successful login, the app sends
+an informational email so they can recognize an unexpected access without
+adding a verification-code step to creating a group.
 
 ## Local development
 

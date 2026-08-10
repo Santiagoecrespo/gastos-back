@@ -4,4 +4,3 @@ from app.models.group import Group  # noqa: F401
 from app.models.participant import Participant  # noqa: F401  (replaces UserGroup)
 from app.models.expense import Expense  # noqa: F401
 from app.models.expense_share import ExpenseShare  # noqa: F401
-from app.models.email_login_code import EmailLoginCode  # noqa: F401

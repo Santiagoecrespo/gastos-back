@@ -1,21 +1,6 @@
 // src/services/auth.service.ts
 import client from "../api/client";
-import type { AuthResponse, AuthUser, EmailAccessResponse, UserProfile } from "../types";
-
-export async function requestEmailCode(email: string, mpAlias?: string): Promise<void> {
-  await client.post("/auth/request-code", {
-    email,
-    mp_alias: mpAlias?.trim() || null,
-  });
-}
-
-export async function verifyEmailCode(
-  email: string,
-  code: string
-): Promise<{ token: string; user: AuthUser }> {
-  const { data } = await client.post<EmailAccessResponse>("/auth/verify-code", { email, code });
-  return { token: data.access_token, user: data.user };
-}
+import type { AuthResponse, AuthUser, UserProfile } from "../types";
 
 export async function registerUser(
   email: string,

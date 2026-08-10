@@ -16,9 +16,9 @@ export default function Navbar() {
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <button
           onClick={() => navigate("/dashboard")}
-          className="text-lg font-bold tracking-tight text-gray-100 hover:text-accent-green transition-colors"
+          className="text-lg font-bold tracking-tight text-white hover:text-sky-100 transition-colors"
         >
-          Split<span className="text-accent-green">Wise</span>
+          Junta<span className="text-sky-200">Cuentas</span>
         </button>
 
         <div className="flex items-center gap-3">

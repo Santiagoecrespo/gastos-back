@@ -1,5 +1,5 @@
 """
-SplitWise — API entrypoint.
+JuntaCuentas — API entrypoint.
 
 Boots the FastAPI application and creates database tables on startup.
 """
@@ -61,14 +61,6 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("ALTER TABLE users ADD COLUMN mp_alias VARCHAR(100)"))
                 conn.commit()
 
-        # Passwordless sign-in requires a persisted mailbox-verification flag.
-        if "users" in tables:
-            u_cols = [c["name"] for c in inspector.get_columns("users")]
-            if "email_verified" not in u_cols:
-                # FALSE works for both PostgreSQL in production and local SQLite.
-                conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE"))
-                conn.commit()
-
         # Add mp_alias to participants if missing
         if "participants" in tables:
             p_cols = [c["name"] for c in inspector.get_columns("participants")]
@@ -103,7 +95,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="SplitWise API",
+    title="JuntaCuentas API",
     description="Backend for a group expense-splitting application.",
     version="0.1.0",
     lifespan=lifespan,

@@ -5,10 +5,6 @@ export interface AuthResponse {
   token_type: string;
 }
 
-export interface EmailAccessResponse extends AuthResponse {
-  user: AuthUser;
-}
-
 export interface AuthUser {
   id: string;
   email: string;
