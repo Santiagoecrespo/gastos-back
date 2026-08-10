@@ -26,3 +26,7 @@ npm run dev
 
 For a local email test, use a development SMTP inbox (such as Mailpit) and set
 the same SMTP variables before starting the backend.
+
+For a provider that requires port 465 (for example, Resend SMTP), set
+`SMTP_PORT=465`, `SMTP_USE_SSL=true`, and `SMTP_USE_TLS=false`. For most port
+587 providers, keep `SMTP_USE_TLS=true` and `SMTP_USE_SSL=false`.

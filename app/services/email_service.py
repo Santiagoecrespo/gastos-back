@@ -32,10 +32,12 @@ def send_login_code(recipient: str, code: str) -> None:
     username = os.environ.get("SMTP_USERNAME")
     password = os.environ.get("SMTP_PASSWORD")
     use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
+    use_ssl = os.environ.get("SMTP_USE_SSL", "false").lower() == "true"
 
     try:
-        with smtplib.SMTP(host, port, timeout=15) as smtp:
-            if use_tls:
+        client_class = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+        with client_class(host, port, timeout=15) as smtp:
+            if use_tls and not use_ssl:
                 smtp.starttls()
             if username and password:
                 smtp.login(username, password)
