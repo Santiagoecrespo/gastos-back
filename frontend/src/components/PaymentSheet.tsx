@@ -10,25 +10,18 @@ interface Props {
 
 interface Platform {
   name: string;
-  packageName?: string;
-  appLinkHost?: string;
+  appLinkUrl?: string;
   tone: string;
 }
 
 const PLATFORMS: Platform[] = [
-  { name: "Mercado Pago", packageName: "com.mercadopago.wallet", appLinkHost: "www.mercadopago.com.ar", tone: "border-blue-500/30 hover:bg-blue-500/10" },
-  { name: "Ualá", packageName: "ar.com.bancar.uala", appLinkHost: "www.uala.com.ar", tone: "border-purple-500/30 hover:bg-purple-500/10" },
-  { name: "Naranja X", packageName: "com.tarjetanaranja.ncuenta", appLinkHost: "www.naranjax.com", tone: "border-orange-500/30 hover:bg-orange-500/10" },
-  { name: "MODO", packageName: "com.playdigital.modo", appLinkHost: "www.modo.com.ar", tone: "border-sky-500/30 hover:bg-sky-500/10" },
-  { name: "Prex", packageName: "air.Prex", appLinkHost: "www.prexcard.com", tone: "border-green-500/30 hover:bg-green-500/10" },
+  { name: "Mercado Pago", appLinkUrl: "https://www.mercadopago.com.ar/", tone: "border-blue-500/30 hover:bg-blue-500/10" },
+  { name: "Ualá", appLinkUrl: "https://www.uala.com.ar/", tone: "border-purple-500/30 hover:bg-purple-500/10" },
+  { name: "Naranja X", appLinkUrl: "https://www.naranjax.com/", tone: "border-orange-500/30 hover:bg-orange-500/10" },
+  { name: "MODO", appLinkUrl: "https://www.modo.com.ar/", tone: "border-sky-500/30 hover:bg-sky-500/10" },
+  { name: "Prex", appLinkUrl: "https://prex.onelink.me/RrDE/prex1", tone: "border-green-500/30 hover:bg-green-500/10" },
   { name: "Solo copiar", tone: "border-dark-300 hover:bg-dark-200" },
 ];
-
-function androidLaunchIntent(packageName: string, appLinkHost: string) {
-  // Android Chrome accepts only browser-safe activities. This uses each wallet's
-  // official app-link domain and deliberately has no browser fallback.
-  return `intent://${appLinkHost}/#Intent;scheme=https;package=${packageName};end`;
-}
 
 export default function PaymentSheet({ alias, amount, recipientName, open, onClose }: Props) {
   const [toast, setToast] = useState("");
@@ -71,18 +64,20 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
   };
 
   const openPlatform = async (platform: Platform) => {
-    if (!platform.packageName || !platform.appLinkHost) {
+    if (!platform.appLinkUrl) {
       await copyAlias();
       notify("Alias copiado. Pegalo en la billetera que uses.");
       return;
     }
 
-    // Start copying while the click still has browser user activation, then launch
-    // immediately so Android does not treat the app intent as a delayed popup.
+    // Start copying while the click still has browser user activation, then open
+    // the verified app link immediately.
     void copyAlias();
-    if (/Android/i.test(navigator.userAgent)) {
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
       notify(`Alias copiado. Abriendo ${platform.name}...`);
-      window.location.href = androidLaunchIntent(platform.packageName, platform.appLinkHost);
+      // Official Android App Links and iOS Universal Links open the installed
+      // wallet directly, instead of taking the user through Play Store first.
+      window.location.href = platform.appLinkUrl;
       return;
     }
 
@@ -106,7 +101,7 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
             <div className="grid grid-cols-3 gap-2 mb-4">
               {PLATFORMS.map((platform) => <button key={platform.name} type="button" onClick={() => void openPlatform(platform)} className={`px-2 py-3 rounded-lg bg-dark-100 border text-xs text-gray-300 transition-all active:scale-[0.96] ${platform.tone}`}>{platform.name}</button>)}
             </div>
-            <p className="text-[11px] text-gray-600 text-center">El alias se copia primero. En Android abrimos la app elegida; en otros dispositivos lo pegás en tu billetera.</p>
+            <p className="text-[11px] text-gray-600 text-center">El alias se copia primero. Con la billetera instalada, el link abre su aplicación.</p>
             <button onClick={close} className="w-full mt-3 py-2.5 text-sm text-gray-500 hover:text-gray-300">Cancelar</button>
           </div>
         </div>
