@@ -274,6 +274,18 @@ export default function GroupDetail() {
   const hostParticipant = group?.participants.find((p) => p.id === group.host_participant_id);
   const lastExpense = expenses[0] ?? null;
 
+  const handleChangeParticipant = () => {
+    if (!id) return;
+    const inviteToken = localStorage.getItem(`group_invite_token_${id}`) || group?.invite_token;
+    localStorage.removeItem(`group_token_${id}`);
+    localStorage.removeItem(`group_participant_${id}`);
+    if (inviteToken) {
+      navigate(`/g/${inviteToken}`, { replace: true });
+      return;
+    }
+    setError("No encontramos el link de invitación para elegir otro integrante.");
+  };
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -288,9 +300,16 @@ export default function GroupDetail() {
             <p className="text-gray-500 text-sm">
               {group?.participants.length} integrantes
               {storedParticipant && (
-                <span className="ml-2 text-accent-green">
-                  {storedParticipant.name}
-                  {isHost && <span className="ml-1">Anfitrion</span>}
+                <span className="ml-2">
+                  <span className="text-accent-green">
+                    {storedParticipant.name}
+                    {isHost && <span className="ml-1">Anfitrion</span>}
+                  </span>
+                  {!isHost && (
+                    <button onClick={handleChangeParticipant} className="ml-2 text-xs text-yellow-500 hover:text-yellow-400 underline">
+                      No soy yo
+                    </button>
+                  )}
                 </span>
               )}
             </p>

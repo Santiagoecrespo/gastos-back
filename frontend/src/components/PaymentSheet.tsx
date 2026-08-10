@@ -11,22 +11,23 @@ interface Props {
 interface Platform {
   name: string;
   packageName?: string;
-  fallbackUrl?: string;
+  appLinkHost?: string;
   tone: string;
 }
 
 const PLATFORMS: Platform[] = [
-  { name: "Mercado Pago", packageName: "com.mercadopago.wallet", fallbackUrl: "https://www.mercadopago.com.ar/", tone: "border-blue-500/30 hover:bg-blue-500/10" },
-  { name: "Ualá", packageName: "ar.com.bancar.uala", fallbackUrl: "https://www.uala.com.ar/", tone: "border-purple-500/30 hover:bg-purple-500/10" },
-  { name: "Naranja X", packageName: "com.tarjetanaranja.ncuenta", fallbackUrl: "https://www.naranjax.com/", tone: "border-orange-500/30 hover:bg-orange-500/10" },
-  { name: "MODO", packageName: "com.playdigital.modo", fallbackUrl: "https://www.modo.com.ar/", tone: "border-sky-500/30 hover:bg-sky-500/10" },
-  { name: "Prex", packageName: "air.Prex", fallbackUrl: "https://www.prexcard.com/", tone: "border-green-500/30 hover:bg-green-500/10" },
+  { name: "Mercado Pago", packageName: "com.mercadopago.wallet", appLinkHost: "www.mercadopago.com.ar", tone: "border-blue-500/30 hover:bg-blue-500/10" },
+  { name: "Ualá", packageName: "ar.com.bancar.uala", appLinkHost: "www.uala.com.ar", tone: "border-purple-500/30 hover:bg-purple-500/10" },
+  { name: "Naranja X", packageName: "com.tarjetanaranja.ncuenta", appLinkHost: "www.naranjax.com", tone: "border-orange-500/30 hover:bg-orange-500/10" },
+  { name: "MODO", packageName: "com.playdigital.modo", appLinkHost: "www.modo.com.ar", tone: "border-sky-500/30 hover:bg-sky-500/10" },
+  { name: "Prex", packageName: "air.Prex", appLinkHost: "www.prexcard.com", tone: "border-green-500/30 hover:bg-green-500/10" },
   { name: "Solo copiar", tone: "border-dark-300 hover:bg-dark-200" },
 ];
 
-function androidLaunchIntent(packageName: string, fallbackUrl: string) {
-  const fallback = encodeURIComponent(fallbackUrl);
-  return `intent://open#Intent;scheme=juntacuentas;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${packageName};S.browser_fallback_url=${fallback};end`;
+function androidLaunchIntent(packageName: string, appLinkHost: string) {
+  // Android Chrome accepts only browser-safe activities. This uses each wallet's
+  // official app-link domain and deliberately has no browser fallback.
+  return `intent://${appLinkHost}/#Intent;scheme=https;package=${packageName};end`;
 }
 
 export default function PaymentSheet({ alias, amount, recipientName, open, onClose }: Props) {
@@ -70,15 +71,18 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
   };
 
   const openPlatform = async (platform: Platform) => {
-    await copyAlias();
-    if (!platform.packageName || !platform.fallbackUrl) {
+    if (!platform.packageName || !platform.appLinkHost) {
+      await copyAlias();
       notify("Alias copiado. Pegalo en la billetera que uses.");
       return;
     }
 
+    // Start copying while the click still has browser user activation, then launch
+    // immediately so Android does not treat the app intent as a delayed popup.
+    void copyAlias();
     if (/Android/i.test(navigator.userAgent)) {
       notify(`Alias copiado. Abriendo ${platform.name}...`);
-      window.location.href = androidLaunchIntent(platform.packageName, platform.fallbackUrl);
+      window.location.href = androidLaunchIntent(platform.packageName, platform.appLinkHost);
       return;
     }
 
