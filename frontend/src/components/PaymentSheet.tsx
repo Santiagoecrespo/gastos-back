@@ -10,16 +10,16 @@ interface Props {
 
 interface Platform {
   name: string;
-  appLinkUrl?: string;
+  androidUrl?: string;
   tone: string;
 }
 
 const PLATFORMS: Platform[] = [
-  { name: "Mercado Pago", appLinkUrl: "https://www.mercadopago.com.ar/", tone: "border-blue-500/30 hover:bg-blue-500/10" },
-  { name: "Ualá", appLinkUrl: "https://www.uala.com.ar/", tone: "border-purple-500/30 hover:bg-purple-500/10" },
-  { name: "Naranja X", appLinkUrl: "https://www.naranjax.com/", tone: "border-orange-500/30 hover:bg-orange-500/10" },
-  { name: "MODO", appLinkUrl: "https://www.modo.com.ar/", tone: "border-sky-500/30 hover:bg-sky-500/10" },
-  { name: "Prex", appLinkUrl: "https://prex.onelink.me/RrDE/prex1", tone: "border-green-500/30 hover:bg-green-500/10" },
+  { name: "Mercado Pago", androidUrl: "market://details?id=com.mercadopago.wallet", tone: "border-blue-500/30 hover:bg-blue-500/10" },
+  { name: "Ualá", androidUrl: "market://details?id=ar.com.bancar.uala", tone: "border-purple-500/30 hover:bg-purple-500/10" },
+  { name: "Naranja X", androidUrl: "market://details?id=com.tarjetanaranja.ncuenta", tone: "border-orange-500/30 hover:bg-orange-500/10" },
+  { name: "MODO", androidUrl: "market://details?id=com.playdigital.modo", tone: "border-sky-500/30 hover:bg-sky-500/10" },
+  { name: "Prex", androidUrl: "market://details?id=air.Prex", tone: "border-green-500/30 hover:bg-green-500/10" },
   { name: "Solo copiar", tone: "border-dark-300 hover:bg-dark-200" },
 ];
 
@@ -64,23 +64,22 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
   };
 
   const openPlatform = async (event: MouseEvent<HTMLAnchorElement>, platform: Platform) => {
-    if (!platform.appLinkUrl) {
+    if (!platform.androidUrl) {
       event.preventDefault();
       await copyAlias();
       notify("Alias copiado. Pegalo en la billetera que uses.");
       return;
     }
 
-    // Let the browser follow a real user-clicked App Link. Programmatic redirects
-    // are often treated as ordinary web navigation instead of opening the app.
+    // This native market URL opens Play Store instead of a wallet's website.
     void copyAlias();
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      notify(`Alias copiado. Abriendo ${platform.name}...`);
+    if (/Android/i.test(navigator.userAgent)) {
+      notify(`Alias copiado. Abriendo Play Store para ${platform.name}...`);
       return;
     }
 
     event.preventDefault();
-    notify(`Alias copiado. Abrí ${platform.name} en tu celular y pegalo para transferir.`);
+    notify(`Alias copiado. Abrí ${platform.name} en tu celular Android y pegalo para transferir.`);
   };
 
   if (!open) return null;
@@ -95,12 +94,12 @@ export default function PaymentSheet({ alias, amount, recipientName, open, onClo
           <div className="px-5 pb-6">
             <div className="text-center mb-5"><p className="text-sm text-gray-400 mb-1">Pagar a {recipientName}</p><p className="text-2xl font-bold text-accent-red">{formattedAmount}</p></div>
             <div className="bg-dark-100 rounded-lg px-4 py-3 mb-4 flex items-center justify-between border border-dark-300"><div><p className="text-xs text-gray-500">Alias de pago</p><p className="text-sm font-mono text-gray-200 mt-0.5">{alias}</p></div><button onClick={() => void copyAlias().then(() => notify("Alias copiado"))} className="text-xs text-accent-green font-medium px-2 py-1 rounded hover:bg-accent-green/10">Copiar</button></div>
-            <a href={PLATFORMS[0].appLinkUrl} onClick={(event) => void openPlatform(event, PLATFORMS[0])} className="block w-full text-center bg-accent-green text-dark font-bold py-3.5 px-6 rounded-xl text-base hover:brightness-110 active:scale-[0.98] transition-all mb-4">Pagar con Mercado Pago</a>
+            <a href={PLATFORMS[0].androidUrl} onClick={(event) => void openPlatform(event, PLATFORMS[0])} className="block w-full text-center bg-accent-green text-dark font-bold py-3.5 px-6 rounded-xl text-base hover:brightness-110 active:scale-[0.98] transition-all mb-4">Abrir Mercado Pago</a>
             <p className="text-xs text-gray-500 mb-2">Elegí la billetera donde vas a hacer la transferencia:</p>
             <div className="grid grid-cols-3 gap-2 mb-4">
-              {PLATFORMS.map((platform) => <a key={platform.name} href={platform.appLinkUrl} onClick={(event) => void openPlatform(event, platform)} className={`text-center px-2 py-3 rounded-lg bg-dark-100 border text-xs text-gray-300 transition-all active:scale-[0.96] ${platform.tone}`}>{platform.name}</a>)}
+              {PLATFORMS.map((platform) => <a key={platform.name} href={platform.androidUrl} onClick={(event) => void openPlatform(event, platform)} className={`text-center px-2 py-3 rounded-lg bg-dark-100 border text-xs text-gray-300 transition-all active:scale-[0.96] ${platform.tone}`}>{platform.name}</a>)}
             </div>
-            <p className="text-[11px] text-gray-600 text-center">El alias se copia primero. Con la billetera instalada, el link abre su aplicación.</p>
+            <p className="text-[11px] text-gray-600 text-center">El alias se copia primero. Play Store te deja abrir la billetera instalada.</p>
             <button onClick={close} className="w-full mt-3 py-2.5 text-sm text-gray-500 hover:text-gray-300">Cancelar</button>
           </div>
         </div>
