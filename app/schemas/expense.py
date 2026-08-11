@@ -35,6 +35,16 @@ class ExpenseResponse(BaseModel):
     shares: list[ShareOut]
 
 
+class ExpenseShareDetail(BaseModel):
+    participant_id: str
+    amount_owed: float
+    contribution: float
+
+
+class ExpenseContributionsUpdate(BaseModel):
+    contributions: list[ContributionIn]
+
+
 # ── Balance response ──────────────────────────────────────────────────────
 
 class BalanceTransaction(BaseModel):
@@ -65,3 +75,4 @@ class ExpenseListItem(BaseModel):
     amount: float
     date: date
     payer_name: str
+    shares: list[ExpenseShareDetail]

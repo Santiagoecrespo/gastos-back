@@ -28,7 +28,9 @@ from app.schemas.expense import (
     ExpenseCreate,
     ContributionIn,
     ExpenseResponse,
+    ExpenseContributionsUpdate,
     ExpenseListItem,
+    ExpenseShareDetail,
     ShareOut,
     BalanceResponse,
     BalanceTransaction,
@@ -255,6 +257,14 @@ async def list_expenses(
             amount=exp.amount,
             date=exp.date,
             payer_name=payer_map.get(exp.payer_id, "Desconocido"),
+            shares=[
+                ExpenseShareDetail(
+                    participant_id=share.participant_id,
+                    amount_owed=share.amount_owed,
+                    contribution=share.contribution,
+                )
+                for share in exp.shares
+            ],
         )
         for exp in expenses
     ]
@@ -284,6 +294,49 @@ async def set_my_contribution(
     db.commit()
     await manager.broadcast(group_id, "refresh")
     return {"participant_id": participant.id, "pending_contribution": participant.pending_contribution}
+
+
+@router.patch(
+    "/groups/{group_id}/expenses/{expense_id}/contributions",
+    response_model=ExpenseResponse,
+    summary="Correct contributions on an existing expense (host only)",
+)
+async def update_expense_contributions(
+    group_id: str,
+    expense_id: str,
+    payload: ExpenseContributionsUpdate,
+    db: Session = Depends(get_db),
+    participant: Participant = Depends(get_current_participant),
+):
+    _assert_in_group(participant, group_id)
+    group = _get_group_or_404(group_id, db)
+    if group.host_participant_id and participant.id != group.host_participant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el anfitrión puede corregir aportes")
+
+    expense = db.query(Expense).filter(Expense.id == expense_id, Expense.group_id == group_id).first()
+    if not expense:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gasto no encontrado")
+
+    shares_by_participant = {share.participant_id: share for share in expense.shares}
+    for contribution in payload.contributions:
+        share = shares_by_participant.get(contribution.participant_id)
+        if not share:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El integrante no pertenece a este gasto")
+        if contribution.amount > share.amount_owed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Un aporte no puede superar la parte que le corresponde a ese integrante",
+            )
+        share.contribution = contribution.amount
+
+    db.commit()
+    await manager.broadcast(group_id, "refresh")
+    return ExpenseResponse(
+        expense_id=expense.id,
+        amount=expense.amount,
+        split_per_person=round(expense.amount / len(expense.shares), 2) if expense.shares else 0,
+        shares=[ShareOut(participant_id=share.participant_id, amount_owed=share.amount_owed) for share in expense.shares],
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -91,6 +91,13 @@ export interface ExpenseListItem {
   amount: number;
   date: string;
   payer_name: string;
+  shares: ExpenseShareDetail[];
+}
+
+export interface ExpenseShareDetail {
+  participant_id: string;
+  amount_owed: number;
+  contribution: number;
 }
 
 export interface PaymentButtonProps {

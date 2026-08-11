@@ -111,3 +111,11 @@ export async function deleteGroup(groupId: string): Promise<void> {
 export async function deleteExpense(groupId: string, expenseId: string): Promise<void> {
   await client.delete(`/api/groups/${groupId}/expenses/${expenseId}`);
 }
+
+export async function updateExpenseContributions(
+  groupId: string,
+  expenseId: string,
+  contributions: { participant_id: string; amount: number }[]
+): Promise<void> {
+  await client.patch(`/api/groups/${groupId}/expenses/${expenseId}/contributions`, { contributions });
+}

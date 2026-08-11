@@ -11,6 +11,7 @@ import {
   setMyContribution,
   settleGroup,
   deleteExpense,
+  updateExpenseContributions,
 } from "../services/groups.service";
 import type { GroupResponse, BalanceResponse, ExpenseListItem } from "../types";
 
@@ -74,6 +75,10 @@ export default function GroupDetail() {
 
   // Delete expense confirmation
   const [confirmDeleteExpense, setConfirmDeleteExpense] = useState<string | null>(null);
+  const [editingContributionsFor, setEditingContributionsFor] = useState<string | null>(null);
+  const [editedContributions, setEditedContributions] = useState<Record<string, string>>({});
+  const [savingContributions, setSavingContributions] = useState(false);
+  const [contributionEditError, setContributionEditError] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -230,6 +235,37 @@ export default function GroupDetail() {
       setExpenseError("No se pudo eliminar el gasto");
     } finally {
       setConfirmDeleteExpense(null);
+    }
+  };
+
+  const startEditingContributions = (expense: ExpenseListItem) => {
+    setContributionEditError("");
+    setEditedContributions(
+      Object.fromEntries(expense.shares.map((share) => [share.participant_id, share.contribution ? String(share.contribution) : ""]))
+    );
+    setEditingContributionsFor(expense.expense_id);
+  };
+
+  const saveExpenseContributions = async (expense: ExpenseListItem) => {
+    setContributionEditError("");
+    setSavingContributions(true);
+    try {
+      await updateExpenseContributions(
+        id!,
+        expense.expense_id,
+        expense.shares.map((share) => ({
+          participant_id: share.participant_id,
+          amount: parseFloat(editedContributions[share.participant_id]) || 0,
+        }))
+      );
+      setExpenses(await getExpenses(id!));
+      if (activeTab === "balances") await fetchBalances();
+      setEditingContributionsFor(null);
+    } catch (err: unknown) {
+      const axErr = err as { response?: { data?: { detail?: string } } };
+      setContributionEditError(axErr.response?.data?.detail || "No se pudieron guardar los aportes");
+    } finally {
+      setSavingContributions(false);
     }
   };
 
@@ -586,8 +622,60 @@ export default function GroupDetail() {
                         </p>
                       </div>
                     </div>
+                    {exp.shares.some((share) => share.contribution > 0) && (
+                      <p className="text-xs text-accent-green">
+                        Aportes cargados: {exp.shares
+                          .filter((share) => share.contribution > 0)
+                          .map((share) => {
+                            const person = sortedParticipants.find((p) => p.id === share.participant_id);
+                            return `${person?.name || "Integrante"} $${share.contribution.toLocaleString("es-AR")}`;
+                          })
+                          .join(" · ")}
+                      </p>
+                    )}
                     {isHost && (
-                      <div className="flex justify-end pt-1">
+                      <div className="pt-1 space-y-3">
+                        {editingContributionsFor === exp.expense_id ? (
+                          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3">
+                            <div>
+                              <p className="text-sm text-yellow-400 font-medium">Corregir aportes</p>
+                              <p className="text-xs text-gray-500 mt-1">Anotá lo que cada persona ya puso para este gasto. Se descuenta de lo que le falta pagar.</p>
+                            </div>
+                            {sortedParticipants.map((person) => {
+                              const share = exp.shares.find((item) => item.participant_id === person.id);
+                              if (!share) return null;
+                              return (
+                                <div key={person.id} className="flex items-center gap-2">
+                                  <span className="text-sm text-gray-300 flex-1">{person.name}</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={share.amount_owed}
+                                    step="0.01"
+                                    value={editedContributions[person.id] ?? ""}
+                                    onChange={(event) => setEditedContributions((previous) => ({ ...previous, [person.id]: event.target.value }))}
+                                    placeholder="0"
+                                    className="input w-28 text-sm"
+                                  />
+                                </div>
+                              );
+                            })}
+                            {contributionEditError && <p className="text-xs text-accent-red">{contributionEditError}</p>}
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setEditingContributionsFor(null)} className="btn-ghost text-xs px-3 py-2">Cancelar</button>
+                              <button onClick={() => void saveExpenseContributions(exp)} disabled={savingContributions} className="btn-primary text-xs px-3 py-2">
+                                {savingContributions ? "Guardando..." : "Guardar aportes"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end">
+                            <button onClick={() => startEditingContributions(exp)} className="text-xs text-yellow-500 hover:text-yellow-400 transition-colors">
+                              Corregir aportes
+                            </button>
+                          </div>
+                        )}
+                        <div className="flex justify-end">
                         {confirmDeleteExpense === exp.expense_id ? (
                           <div className="flex gap-2">
                             <button
@@ -611,6 +699,7 @@ export default function GroupDetail() {
                             Eliminar
                           </button>
                         )}
+                        </div>
                       </div>
                     )}
                   </div>
